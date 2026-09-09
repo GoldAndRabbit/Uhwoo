@@ -54,6 +54,22 @@ LLM transport 从 `pitchasso/llm_api` 移植过来：OpenAI 兼容的 `/v1/chat/
 所以狼队夜里的商议只进狼的上下文，预言家的查验结果只进预言家的上下文。
 左栏每个玩家后面的 `2 次决策 · 1.3k` 就是它的决策次数和当前上下文字符数。
 
+## 两种模式
+
+左栏第一个下拉框切换：
+
+- **模拟模式**（默认）—— 6 个 agent 自己打，你是上帝视角：狼队夜里的商议、预言家的查验、
+  每个 agent 吃进去的上下文和吐出来的 JSON，全都看得到。
+- **游玩模式** —— 随机给你一个座位，其余 5 个交给模型。视野严格按这个座位裁：
+  只有公开发言、投票、死讯，加上你自己的身份和技能信息（你是狼就看得到狼队商议，
+  是预言家就看得到自己的查验结果）。中栏不再显示别人的上下文，左栏别人的身份是 `?`。
+  轮到你时右栏底部弹出作答面板：发言是输入框，守护/查验/刀人/投票是座位按钮，
+  按钮只列引擎认可的合法目标（不能连守同一人、狼不能刀队友、投票不能投自己）。
+  300 秒不操作就交给模型代打，不会把整局挂死。
+
+裁剪是在服务端做的（`Game._visible` / `_call_visible` / `to_json(filtered=True)`），
+不是前端藏起来 —— 看不到的信息根本不会推到浏览器。存档仍然存完整的上帝视角，复盘时才看得到全部。
+
 ## 规则
 
 - 夜晚：守卫守护（不能连守同一人、可以守自己）→ 狼队商议后刀人 → 预言家查验。守护成功则当晚不死。
@@ -95,8 +111,8 @@ CLOUDFLARED_TUNNEL_UHWOO_TOKEN=eyJ...
 
 ```
 backend/
-  main.py      FastAPI：/api/start /api/stop /api/stream(SSE) /api/snapshot /api/history
-  game.py      对局引擎：夜晚 → 白天 → 投票 → 胜负，逐条广播事件
+  main.py      FastAPI：/api/start /api/stop /api/answer /api/stream(SSE) /api/snapshot /api/history
+  game.py      对局引擎：夜晚 → 白天 → 投票 → 胜负，逐条广播事件；游玩模式在这里等你回答
   model.py     Role / Player / Event(audience) / LLMCall
   prompts.py   常驻的规则与身份 + 每一步的指令和 JSON schema
   llm.py       调用层：真实模型 + mock 启发式大脑 + JSON 提取

@@ -56,6 +56,7 @@ THINKING = {"type": "string", "description": "你的推理（不会被别人看�
 
 def guard_instruction(rnd: int, alive: list[int], last: int | None) -> tuple[str, dict]:
     ban = f"\n上一晚你守护了 {last} 号，今晚不能再守 {last} 号。" if last else ""
+    pool = [s for s in alive if s != last] or alive
     text = (
         f"现在是第 {rnd} 夜，请选择今晚要守护的玩家。存活玩家：{alive}。{ban}\n"
         "你需要确认你的判断和发言策略，帮助你的阵营获取更多的信息以走向胜利。\n\n"
@@ -63,10 +64,12 @@ def guard_instruction(rnd: int, alive: list[int], last: int | None) -> tuple[str
         '  "thinking": 你的推理（不会被别人看到）,\n'
         '  "target": 要守护的座位号（整数）\n}'
     )
-    return text, _schema({"thinking": THINKING, "target": {"type": "integer", "enum": alive}})
+    return text, _schema({"thinking": THINKING, "target": {"type": "integer", "enum": pool}})
 
 
-def wolf_instruction(rnd: int, alive: list[int], mates: list[int]) -> tuple[str, dict]:
+def wolf_instruction(rnd: int, alive: list[int], mates: list[int],
+                     wolves: list[int] | None = None) -> tuple[str, dict]:
+    pool = [s for s in alive if s not in (wolves or [])] or alive
     text = (
         f"现在是第 {rnd} 夜，狼队商议今晚刀谁。存活玩家：{alive}，你的狼队友：{mates}。\n"
         "说出你想刀的人和理由，队友能看到你的发言。优先考虑：预言家在谁身上、谁的发言最有威胁、白天的局势怎么带。\n\n"
@@ -76,13 +79,15 @@ def wolf_instruction(rnd: int, alive: list[int], mates: list[int]) -> tuple[str,
         '  "reason": 给队友看的一句话理由\n}'
     )
     return text, _schema(
-        {"thinking": THINKING, "target": {"type": "integer", "enum": alive}, "reason": {"type": "string"}}
+        {"thinking": THINKING, "target": {"type": "integer", "enum": pool}, "reason": {"type": "string"}}
     )
 
 
-def seer_instruction(rnd: int, alive: list[int], checked: list[int]) -> tuple[str, dict]:
+def seer_instruction(rnd: int, alive: list[int], checked: list[int],
+                     me: int | None = None) -> tuple[str, dict]:
     done = f"\n你已经查验过：{checked}，不要重复查验。" if checked else ""
-    pool = [s for s in alive if s not in checked] or alive
+    pool = [s for s in alive if s not in checked and s != me] \
+        or [s for s in alive if s != me] or alive
     text = (
         f"现在是第 {rnd} 夜，请选择今晚要查验的玩家。存活玩家：{alive}。{done}\n"
         "选择信息量最大的人查验。\n\n"

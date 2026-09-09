@@ -15,6 +15,7 @@ const S = {
 const kchars = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const roleOf = (seat) => S.state?.players?.find((p) => p.seat === seat)?.role || "";
+const isPlay = () => S.state?.mode === "play";
 const audienceLabel = (a) =>
   a === "all" ? null : "仅 " + a.map((s) => s + "号").join("/");
 
@@ -27,9 +28,11 @@ function renderPlayers() {
     const active = S.filter === p.seat ? " active" : "";
     const dead = p.alive ? "" : " dead";
     const meta = `${p.alive ? "存活" : "第" + p.death_round + "轮出局"}<br>${p.decisions} 次决策 · ${kchars(p.ctx_chars)}`;
+    const me = p.seat === S.state.human ? '<span class="rtag r-守卫">你</span>' : "";
+    const tag = p.role ? `<span class="rtag r-${p.role}">${p.role}</span>`
+                       : `<span class="rtag r-平民">?</span>`;
     return `<div class="prow${active}${dead}" data-seat="${p.seat}">
-      <span class="pname">${p.seat}号</span>
-      <span class="rtag r-${p.role}">${p.role}</span>
+      <span class="pname">${p.seat}号</span>${tag}${me}
       <span class="pmeta">${meta}</span></div>`;
   });
   const sysActive = S.filter === "sys" ? " active" : "";
@@ -47,6 +50,13 @@ function renderPlayers() {
       if (isMobile() && S.filter !== null) setTab("ctx");
     })
   );
+  const me = st.human ? st.players.find((p) => p.seat === st.human) : null;
+  $("meCard").hidden = !me;
+  if (me) {
+    $("meCard").innerHTML =
+      `你是 <b>${me.seat}号 · ${me.role || "?"}</b>　${me.alive ? "存活" : "已出局"}<br>
+       只看得到公开发言、投票和你自己的信息。`;
+  }
   const aliveN = st.players.filter((p) => p.alive).length;
   $("aliveCount").textContent = `${aliveN}/${st.players.length} 存活`;
   $("callCount").textContent = st.calls;
@@ -89,7 +99,9 @@ function renderCalls() {
   $("filterName").textContent = S.filter === "sys" ? "系统全局状态" : S.filter + "号";
 
   if (!list.length) {
-    box.innerHTML = `<div class="empty">还没有调用。点「开一局」开始。</div>`;
+    box.innerHTML = isPlay()
+      ? `<div class="empty">游玩模式下这里只显示你自己的回合，别人的上下文不给你看。</div>`
+      : `<div class="empty">还没有调用。点「开一局」开始。</div>`;
     return;
   }
   box.innerHTML = list.slice(-60).map(cardHTML).join("");
@@ -138,7 +150,7 @@ function rowHTML(ev) {
   if (ev.kind === "speech") {
     const seat = ev.seat, role = roleOf(seat);
     const body = ev.text.replace(/^[^：]*：/, "");
-    return `<div class="row"><span class="badge r-${role}">${seat}号 ${role}</span>
+    return `<div class="row"><span class="badge r-${role || "平民"}">${seat}号${role ? " " + role : ""}</span>
       <div class="bubble say" data-seat="${seat}" data-text="${esc(body)}"
            title="点一下重听">${esc(body)}</div></div>`;
   }
@@ -148,7 +160,8 @@ function rowHTML(ev) {
     return `<div class="row"><div class="bubble result">${esc(ev.text)}</div></div>`;
   if (ev.kind === "night_action") {
     const role = ev.seat ? roleOf(ev.seat) : "";
-    const badge = ev.seat ? `<span class="badge r-${role}">${ev.seat}号 ${role}</span>` : "";
+    const badge = ev.seat
+      ? `<span class="badge r-${role || "平民"}">${ev.seat}号${role ? " " + role : ""}</span>` : "";
     return `<div class="row">${badge}${onlyTag}
       <div class="bubble ${only ? "wolfnight" : ""}">${esc(ev.text)}</div></div>`;
   }
@@ -194,6 +207,7 @@ function connect() {
       if (TTS.ok && S.state.status === "running") {
         TTS.on = !!S.state.tts && $("ttsOn").checked;
       }
+      renderAsk(S.state.pending);        // 刷新页面时如果正轮到你，把问题接回来
       renderAll(); return;
     }
     if (msg.state) S.state = msg.state;
@@ -207,6 +221,8 @@ function connect() {
     } else if (msg.type === "call") {
       S.calls.push(msg.data);
       renderCalls();
+    } else if (msg.type === "prompt") {
+      renderAsk(msg.data);
     } else if (msg.type === "thinking") {
       setRun(`${msg.title} 思考中…`, false);
     }
@@ -214,6 +230,66 @@ function connect() {
     if (["finished", "stopped"].includes(S.state?.status)) { loadHistory(); renderAll(); }
   };
   S.es.onerror = () => { /* 浏览器会自动重连 */ };
+}
+
+/* ---------------- 游玩模式：轮到你 ---------------- */
+let askTimer = null;
+
+function renderAsk(p) {
+  const box = $("ask");
+  if (!p) { box.hidden = true; clearInterval(askTimer); return; }
+  box.hidden = false;
+  $("askTitle").textContent = p.title + "　轮到你";
+  const q = `<div class="ask-q">${esc(p.instruction)}</div>`;
+
+  if (p.field === "speech") {
+    $("askBody").innerHTML = q +
+      `<textarea id="askText" placeholder="说点什么，所有人都看得到…"></textarea>
+       <button class="send" id="askSend">发言</button>`;
+    $("askSend").addEventListener("click", () =>
+      submitAnswer({ speech: $("askText").value }));
+    $("askText").focus();
+  } else {
+    const seats = (p.options || []).map((s) =>
+      `<button data-seat="${s}">${s}号</button>`).join("");
+    $("askBody").innerHTML = q +
+      `<div class="seats" id="askSeats">${seats}</div>
+       <input type="text" id="askReason" placeholder="理由（可留空）">
+       <button class="send" id="askSend" disabled>确定</button>`;
+    let chosen = null;
+    $("askSeats").querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => {
+        chosen = Number(b.dataset.seat);
+        $("askSeats").querySelectorAll("button").forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+        $("askSend").disabled = false;
+      }));
+    $("askSend").addEventListener("click", () =>
+      submitAnswer({ target: chosen, reason: $("askReason").value }));
+  }
+
+  clearInterval(askTimer);
+  askTimer = setInterval(() => {
+    const left = Math.max(0, p.timeout - (Date.now() / 1000 - p.asked_at));
+    $("askLeft").textContent = left > 0 ? `剩 ${Math.ceil(left)}s` : "已超时，交给模型代打";
+    if (left <= 0) clearInterval(askTimer);
+  }, 200);
+  if (isMobile()) setTab("log");
+}
+
+async function submitAnswer(payload) {
+  const btn = $("askSend");
+  if (btn) btn.disabled = true;
+  const r = await fetch("/api/answer", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    alert((await r.json()).detail);
+    if (btn) btn.disabled = false;
+    return;
+  }
+  renderAsk(null);
 }
 
 /* ---------------- 移动端页签 ---------------- */
@@ -319,11 +395,12 @@ $("btnStart").addEventListener("click", async () => {
   TTS.on = TTS.ok && $("ttsOn").checked;          // 以点开一局这一刻的勾选为准
   const r = await fetch("/api/start", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: $("modelSel").value, tts: TTS.on }),
+    body: JSON.stringify({ model: $("modelSel").value, tts: TTS.on, mode: $("modeSel").value }),
   });
   if (!r.ok) { alert((await r.json()).detail); $("btnStart").disabled = false; return; }
   const d = await r.json();
   S.state = d.state; S.events = []; S.calls = []; S.filter = null;
+  renderAsk(null);
   renderAll();
   connect();
   if (isMobile()) setTab("log");            // 手机上开局后直接看事件流
@@ -331,6 +408,7 @@ $("btnStart").addEventListener("click", async () => {
 
 $("btnStop").addEventListener("click", async () => {
   $("btnStop").disabled = true;
+  renderAsk(null);
   stopSpeaking();
   await fetch("/api/stop", { method: "POST" });
 });
@@ -374,6 +452,8 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
   const snap = await (await fetch("/api/snapshot")).json();
   if (!snap.empty) {
     S.state = snap.state; S.events = snap.events; S.calls = snap.calls;
+    renderAsk(snap.state.pending);        // 刚进页面就正轮到你的话，直接把问题摆出来
+    if (snap.state.status === "running") $("modeSel").value = snap.state.mode;
     renderAll();
     if (snap.state.status === "running") connect();
   } else {

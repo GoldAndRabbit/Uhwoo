@@ -119,6 +119,26 @@ details[open] summary::before{content:"▾ ";}
 .runbar.done .dots{display:none;}
 .empty{color:#b3ada2;font-size:12px;padding:24px 0;}
 
+/* ---------- 游玩模式 ---------- */
+.me{background:#f1f5f0;border:1px solid #cfe0d2;border-radius:8px;padding:8px 10px;margin-bottom:10px;
+    font-size:12px;color:#33553c;}
+.me b{font-size:13px;}
+.ask{position:sticky;bottom:0;z-index:5;background:var(--panel);border-top:1px solid var(--line);
+     box-shadow:0 -10px 14px -8px rgba(0,0,0,.06);padding:10px 0 12px;}
+.ask[hidden]{display:none;}
+.ask-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12.5px;}
+.ask-left{margin-left:auto;font-size:11.5px;color:var(--dim);}
+.ask-q{font-size:12px;color:#6b6558;margin-bottom:8px;line-height:1.7;white-space:pre-wrap;}
+.seats{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.seats button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 14px;}
+.seats button.on{border-color:#c0392b;background:#fbe4e4;color:#a52a2a;font-weight:600;}
+.ask textarea,.ask input[type=text]{width:100%;border:1px solid var(--line);border-radius:8px;
+     padding:8px 10px;font:inherit;background:var(--panel);color:var(--text);resize:vertical;}
+.ask textarea{min-height:64px;}
+.ask .send{margin-top:8px;width:100%;border:none;border-radius:8px;padding:10px;
+     background:#c0392b;color:#fff;font-weight:600;}
+.ask .send:disabled{background:#dcd9d3;}
+
 /* ---------- 移动端：单栏 + 底部三个页签 ---------- */
 .mobnav{display:none;}
 

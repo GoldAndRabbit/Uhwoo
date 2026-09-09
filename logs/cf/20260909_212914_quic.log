@@ -33,3 +33,16 @@
 2026-09-09T13:35:21Z ERR Request failed error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp [::1]:8130: connect: connection refused" connIndex=0 dest=https://uhwoo.com/api/stream event=0 ip=198.41.192.77 type=http
 2026-09-09T13:39:15Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
 2026-09-09T13:44:15Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
+2026-09-09T13:48:25Z ERR  error="stream 41 canceled by remote with error code 0" connIndex=0 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T13:48:25Z ERR Request failed error="stream 41 canceled by remote with error code 0" connIndex=0 dest=http://uhwoo.com/api/stream event=0 ip=198.41.192.77 type=http
+2026-09-09T13:48:28Z ERR  error="stream 49 canceled by remote with error code 0" connIndex=0 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T13:48:28Z ERR Request failed error="stream 49 canceled by remote with error code 0" connIndex=0 dest=http://uhwoo.com/api/stream event=0 ip=198.41.192.77 type=http
+2026-09-09T13:48:37Z ERR  error="stream 313 canceled by remote with error code 0" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T13:48:37Z ERR Request failed error="stream 313 canceled by remote with error code 0" connIndex=1 dest=http://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T13:48:40Z ERR  error="stream 317 canceled by remote with error code 0" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T13:48:40Z ERR Request failed error="stream 317 canceled by remote with error code 0" connIndex=1 dest=http://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T13:49:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
+2026-09-09T13:50:27Z ERR  error="stream 349 canceled by remote with error code 0" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T13:50:27Z ERR Request failed error="stream 349 canceled by remote with error code 0" connIndex=1 dest=http://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T13:54:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
+2026-09-09T13:59:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"

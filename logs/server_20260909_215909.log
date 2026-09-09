@@ -1,0 +1,29 @@
+INFO:     Started server process [55482]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8130 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55346 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55349 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55349 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55349 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55365 - "POST /api/start HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55366 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55349 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55382 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55390 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55391 - "POST /api/answer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55397 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55404 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55409 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55415 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55417 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55418 - "POST /api/answer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55427 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55431 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55470 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55471 - "POST /api/answer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55475 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55349 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55349 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55480 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55654 - "POST /api/stop HTTP/1.1" 200 OK

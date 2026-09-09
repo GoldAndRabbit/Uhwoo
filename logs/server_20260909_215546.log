@@ -1,0 +1,47 @@
+INFO:     Started server process [55160]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8130 (Press CTRL+C to quit)
+INFO:     127.0.0.1:54752 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54754 - "POST /api/start HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54779 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54820 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54826 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54844 - "POST /api/answer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54845 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54856 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54867 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54888 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54889 - "POST /api/answer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54890 - "GET /api/snapshot HTTP/1.1" 200 OK
+chat 失败 (RemoteProtocolError)，0.6s 后第 2/4 次重试
+INFO:     127.0.0.1:54905 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET / HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /static/style.css?v=1788962103 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54779 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /static/app.js?v=1788962137 HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54779 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54922 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55015 - "POST /api/start HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55026 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55075 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55075 - "GET /static/style.css?v=1788962103 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55076 - "GET /static/app.js?v=1788962137 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55076 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55076 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55076 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55075 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55077 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55145 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55151 - "GET /static/app.js?v=1788962281 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55145 - "GET /static/style.css?v=1788962103 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55145 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55145 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55145 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55151 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55152 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)

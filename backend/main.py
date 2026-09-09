@@ -58,10 +58,41 @@ async def start(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     model = body.get("model") or cfg.model
     if model not in cfg.models:
         raise HTTPException(400, f"未知模型 {model}")
+    mode = body.get("mode") or "sim"
+    if mode not in ("sim", "play"):
+        raise HTTPException(400, f"未知模式 {mode}")
     gid = time.strftime("%Y%m%d%H%M%S")
-    _game = Game(gid, model=model, tts=bool(body.get("tts")))
+    _game = Game(gid, model=model, tts=bool(body.get("tts")), mode=mode,
+                 human_seat=body.get("seat"))
     _task = asyncio.create_task(_game.run())
     return {"gid": gid, "state": _game.state()}
+
+
+@app.post("/api/answer")
+async def answer(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """游玩模式下把你的选择/发言交上去。"""
+    if not _game or _game.status != "running":
+        raise HTTPException(409, "没有进行中的对局")
+    if not _game.pending:
+        raise HTTPException(409, "现在没轮到你")
+    field = _game.pending["field"]
+    if field == "target":
+        try:
+            payload: dict[str, Any] = {"target": int(body.get("target"))}
+        except (TypeError, ValueError):
+            raise HTTPException(400, "target 要是座位号") from None
+        options = _game.pending.get("options") or []
+        if options and payload["target"] not in options:
+            raise HTTPException(400, f"只能选 {options}")
+        payload["reason"] = str(body.get("reason", "")).strip()[:200]
+    else:
+        text = str(body.get("speech", "")).strip()
+        if not text:
+            raise HTTPException(400, "发言不能为空")
+        payload = {"speech": text[:500]}
+    if not _game.answer(payload):
+        raise HTTPException(409, "这一步已经过去了")
+    return {"ok": True}
 
 
 @app.post("/api/stop")
@@ -76,7 +107,7 @@ async def stop() -> dict[str, Any]:
 async def snapshot() -> dict[str, Any]:
     if not _game:
         return {"empty": True}
-    return _game.to_json()
+    return _game.to_json(filtered=True)
 
 
 @app.get("/api/history")
@@ -128,7 +159,7 @@ async def stream() -> StreamingResponse:
             return
         game = _game
         # 先补发已经发生的一切，保证刷新页面不丢历史
-        yield "data: " + json.dumps({"type": "snapshot", "data": game.to_json()},
+        yield "data: " + json.dumps({"type": "snapshot", "data": game.to_json(filtered=True)},
                                     ensure_ascii=False) + "\n\n"
         q = game.subscribe()
         try:
