@@ -2,7 +2,8 @@
 # 后台启动 uhwoo 的 cloudflared 隧道，自动探测可用协议 (quic ⇄ http2)。
 #
 # 两种模式，token 优先（和 pitchasso 一致，不需要 cert.pem）：
-#   1) .env / 环境变量里的 CLOUDFLARED_TUNNEL_TOKEN —— 公网主机名在 Zero Trust 面板里配
+#   1) .env / 环境变量里的 CLOUDFLARED_TUNNEL_UHWOO_TOKEN —— 公网主机名在 Zero Trust 面板里配
+#      （刻意不叫 CLOUDFLARED_TUNNEL_TOKEN：本机还有别的项目用那个名字，撞名会连错隧道）
 #   2) deploy/cloudflared.yml —— cloudflared tunnel login 之后走 setup_tunnel.sh 生成
 #
 # 本机可能同时跑着别的项目的隧道，所以只按自己的 pid 文件停自己那条，别误伤。
@@ -11,15 +12,15 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"; cd "$REPO"
 [[ -f "$REPO/.env" ]] && source "$REPO/.env"
 
 CONF="$REPO/deploy/cloudflared.yml"
-if [[ -n "${CLOUDFLARED_TUNNEL_TOKEN:-}" ]]; then
+if [[ -n "${CLOUDFLARED_TUNNEL_UHWOO_TOKEN:-}" ]]; then
   MODE=token
 elif [[ -f "$CONF" ]]; then
   MODE=config
 else
-  echo "✗ 既没有 CLOUDFLARED_TUNNEL_TOKEN，也没有 $CONF"
+  echo "✗ 既没有 CLOUDFLARED_TUNNEL_UHWOO_TOKEN，也没有 $CONF"
   echo "  token 拿法：Cloudflare Zero Trust → Networks → Tunnels → Create a tunnel →"
   echo "  cloudflared → 名字 uhwoo → 复制 token → 写进 $REPO/.env："
-  echo "  CLOUDFLARED_TUNNEL_TOKEN=eyJ..."
+  echo "  CLOUDFLARED_TUNNEL_UHWOO_TOKEN=eyJ..."
   exit 1
 fi
 
@@ -41,7 +42,7 @@ try_protocol() {
   local proto="$1"
   local log="$LOG_DIR/$(date +%Y%m%d_%H%M%S)_${proto}.log"
   if [[ "$MODE" == token ]]; then
-    nohup cloudflared tunnel --protocol "$proto" run --token "$CLOUDFLARED_TUNNEL_TOKEN" >"$log" 2>&1 &
+    nohup cloudflared tunnel --protocol "$proto" run --token "$CLOUDFLARED_TUNNEL_UHWOO_TOKEN" >"$log" 2>&1 &
   else
     nohup cloudflared --config "$CONF" tunnel --protocol "$proto" run >"$log" 2>&1 &
   fi

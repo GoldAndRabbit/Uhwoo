@@ -1,5 +1,7 @@
 # Multi-agent-werewolf
 
+线上：**https://uhwoo.com**
+
 6 人狼人杀的多 agent 模拟：**2 狼人 + 2 平民 + 1 预言家 + 1 守卫**。
 每个玩家是一个独立的 agent，各有各的视野 —— 全局一条事件流，每条事件带 `audience`，
 谁看得到、谁看不到由它决定。右侧是上帝视角（受限信息会打上「仅 X 号」标签），
@@ -60,6 +62,35 @@ LLM transport 从 `pitchasso/llm_api` 移植过来：OpenAI 兼容的 `/v1/chat/
 - 并发：守卫 / 狼队 / 预言家三条线在同一夜里并发跑（狼队内部串行，要看到彼此的提议）；
   投票也是并发的（本来就是同时投），投完再按座位顺序公布。一局约 30~50 次调用、两三分钟。
 
+## 上线
+
+走 cloudflared tunnel：公网流量经 Cloudflare 回落到本机的 uvicorn，不需要公网 IP、不用开端口。
+（同一个账号下的 days4fun 走的是 Cloudflare Pages —— 那套只能跑边缘 JS、请求级生命周期，
+而这里一局是个跑 2~4 分钟的常驻 asyncio 任务 + 一条 SSE 长连接 + 内存里的 6 份 agent 上下文，
+搬不过去，所以选隧道。）
+
+```bash
+./deploy/run_server.sh     # 起 uvicorn，只监听 127.0.0.1:8130
+./deploy/run_cf.sh         # 起隧道，自动 quic/http2 探测
+./deploy/check_cf.sh       # 看本地 + 隧道 + 线上三段通不通
+./deploy/kill_cf.sh        # 只停自己这条隧道
+```
+
+首次要在 Cloudflare Zero Trust 建一条名为 `uhwoo` 的隧道，加 Published application
+`uhwoo.com → http://localhost:8130`（DNS 会自动配好），然后把 token 写进 `.env`：
+
+```
+CLOUDFLARED_TUNNEL_UHWOO_TOKEN=eyJ...
+```
+
+变量名带 `UHWOO` 是刻意的：本机还跑着别的项目的隧道，用通用名会撞。同理，
+`kill_cf.sh` 只按自己的 pid 文件停，不去 `pkill -f 'cloudflared tunnel'`，
+否则会把别人的隧道一起杀掉。
+
+`cloudflared tunnel login` 那条路在国内网络下走不通（回调 login.cloudflareaccess.org 秒 EOF），
+所以用 token 模式。另外本机 DNS 被污染（`uhwoo.com` 会解析到 198.18.x.x），
+自测时用 `curl --resolve uhwoo.com:443:<真实边缘IP>` 绕开，否则每个请求白等 5s。
+
 ## 目录
 
 ```
@@ -71,6 +102,8 @@ backend/
   llm.py       调用层：真实模型 + mock 启发式大脑 + JSON 提取
   llm_api.py   transport（移植自 pitchasso/llm_api）
   cli.py       命令行跑一局
+  tts.py       语音合成（qwen-audio-3.0-tts-flash），发言落地即预热、按文本落盘缓存
+deploy/        run_server.sh / run_cf.sh / kill_cf.sh / check_cf.sh / setup_tunnel.sh
 frontend/      index.html / style.css / app.js（原生三栏 UI，SSE 增量渲染）
 config/        llm_api.yaml
 data/          每局存档 JSON，左栏「历史对话」可回放

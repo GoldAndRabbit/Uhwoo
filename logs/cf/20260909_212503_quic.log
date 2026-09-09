@@ -1,0 +1,31 @@
+2026-09-09T13:25:03Z INF Starting tunnel tunnelID=7851ddf3-95be-430d-9666-d59f8ef017d8
+2026-09-09T13:25:03Z INF Version 2026.3.0 (Checksum 99f099a3834e0b20ec2a18ac77d3d77261b77652310d97eca18fc1797d4349d0)
+2026-09-09T13:25:03Z INF GOOS: darwin, GOVersion: go1.26.1, GoArch: arm64
+2026-09-09T13:25:03Z INF Settings: map[p:quic protocol:quic token:*****]
+2026-09-09T13:25:03Z INF Environmental variables map[CLOUDFLARED_TUNNEL_TOKEN:eyJhIjoiOWEyMDE0Mjk1NDc0MjIxNWY2YjcwNTUwYjdiN2NkNmQiLCJ0IjoiNzg1MWRkZjMtOTViZS00MzBkLTk2NjYtZDU5ZjhlZjAxN2Q4IiwicyI6Ill6RmhZakpqTkdFdFpqRTJOeTAwTlRFd0xXSmxaak10WTJZNVpqTTNaVGsyTVRaaiJ9]
+2026-09-09T13:25:03Z INF cloudflared will not automatically update if installed by a package manager.
+2026-09-09T13:25:03Z INF Generated Connector ID: 4cfd8b44-4d91-4e4f-b35e-9e54d1e49125
+2026-09-09T13:25:03Z INF Initial protocol quic
+2026-09-09T13:25:03Z INF ICMP proxy will use 198.18.0.1 as source for IPv4
+2026-09-09T13:25:03Z INF ICMP proxy will use ::1 in zone lo0 as source for IPv6
+2026-09-09T13:25:03Z INF Created ICMP proxy listening on 198.18.0.1:0
+2026-09-09T13:25:03Z INF Created ICMP proxy listening on [::1]:0
+2026-09-09T13:25:03Z INF ICMP proxy will use 198.18.0.1 as source for IPv4
+2026-09-09T13:25:03Z INF ICMP proxy will use ::1 in zone lo0 as source for IPv6
+2026-09-09T13:25:03Z INF Starting metrics server on 127.0.0.1:20242/metrics
+2026-09-09T13:25:03Z INF You requested 4 HA connections but I can give you at most 2.
+2026-09-09T13:25:03Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=0 event=0 ip=198.41.200.53
+2026-09-09T13:25:03Z ERR Failed to initialize DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
+2026-09-09T13:25:04Z INF Registered tunnel connection connIndex=0 connection=acf614b8-69e2-4bd7-929a-8847e45d0930 event=0 ip=198.41.200.53 location=sjc07 protocol=quic
+2026-09-09T13:25:04Z INF Tunnel connection curve preferences: [X25519MLKEM768 CurveP256] connIndex=1 event=0 ip=198.41.192.77
+2026-09-09T13:25:04Z INF Updated to new configuration config="{\"ingress\":[{\"hostname\":\"uhwoo.com\", \"service\":\"http://localhost:8130\"}, {\"service\":\"http_status:404\"}], \"warp-routing\":{\"enabled\":false}}" version=1
+2026-09-09T13:25:05Z INF Registered tunnel connection connIndex=1 connection=c72ffe0c-8844-4728-8fda-d40ee41f8507 event=0 ip=198.41.192.77 location=lax12 protocol=quic
+2026-09-09T13:28:51Z ERR  error="stream 57 canceled by remote with error code 0" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T13:28:51Z ERR Request failed error="stream 57 canceled by remote with error code 0" connIndex=1 dest=https://uhwoo.com/api/stream event=0 ip=198.41.192.77 type=http
+2026-09-09T13:29:13Z INF Initiating graceful shutdown due to signal terminated ...
+2026-09-09T13:29:14Z ERR failed to run the datagram handler error="Application error 0x0 (remote)" connIndex=0 event=0 ip=198.41.200.53
+2026-09-09T13:29:14Z ERR failed to serve tunnel connection error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=198.41.200.53
+2026-09-09T13:29:14Z ERR Serve tunnel error error="accept stream listener encountered a failure while serving" connIndex=0 event=0 ip=198.41.200.53
+2026-09-09T13:29:14Z INF Retrying connection in up to 1s connIndex=0 event=0 ip=198.41.200.53
+2026-09-09T13:29:14Z ERR Connection terminated connIndex=0
+2026-09-09T13:29:14Z INF Unregistered tunnel connection connIndex=1 event=0 ip=198.41.192.77
