@@ -117,7 +117,7 @@ details[open] summary::before{content:"▾ ";}
 .row{display:flex;gap:8px;align-items:flex-start;margin-bottom:9px;}
 .badge{flex:0 0 auto;border-radius:6px;padding:2px 8px;font-size:11.5px;white-space:nowrap;margin-top:2px;}
 .only{flex:0 0 auto;border:1px solid #e7c9c9;color:#a33b2c;background:#fdf3f2;border-radius:11px;
-      padding:1px 9px;font-size:11px;white-space:nowrap;margin-top:2px;}
+      padding:1px 9px;font-size:11px;white-space:nowrap;margin-top:7px;}
 .bubble{background:#f4f2ee;border-radius:10px;padding:7px 12px;max-width:860px;}
 .bubble.say{cursor:pointer;}
 .bubble.say:hover{background:#eeebe5;}

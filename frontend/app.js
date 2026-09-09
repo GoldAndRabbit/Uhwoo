@@ -171,7 +171,7 @@ function rowHTML(ev) {
       <div class="bubble say">${esc(body)}</div>${playBtn(ev)}</div>`;
   }
   if (ev.kind === "vote")
-    return `<div class="row">${onlyTag}<div class="bubble plain vote">${esc(ev.text)}</div></div>`;
+    return `<div class="row"><div class="bubble plain vote">${esc(ev.text)}</div>${onlyTag}</div>`;
   if (ev.kind === "judge")
     return `<div class="row"><span class="badge judge">法官</span>
       <div class="bubble judgeline">${esc(ev.text)}</div>${playBtn(ev)}</div>`;
@@ -183,10 +183,10 @@ function rowHTML(ev) {
     const badge = ev.seat
       ? `<div class="who">${avatar(role)}
            <span class="badge r-${role || "平民"}">${ev.seat}号${role ? " " + role : ""}</span></div>` : "";
-    return `<div class="row">${badge}${onlyTag}
-      <div class="bubble ${only ? "wolfnight" : ""}">${esc(ev.text)}</div>${playBtn(ev)}</div>`;
+    return `<div class="row">${badge}
+      <div class="bubble ${only ? "wolfnight" : ""}">${esc(ev.text)}</div>${onlyTag}${playBtn(ev)}</div>`;
   }
-  return `<div class="row">${onlyTag}<div class="bubble plain">${esc(ev.text)}</div></div>`;
+  return `<div class="row"><div class="bubble plain">${esc(ev.text)}</div>${onlyTag}</div>`;
 }
 
 
