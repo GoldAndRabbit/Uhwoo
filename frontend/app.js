@@ -262,13 +262,22 @@ function saveRoom() {
 function renderRoom(info) {
   R.host = !!info.is_host;
   $("roomBox").hidden = false;
+  setJoinUI(false);                 // 已经在房里了，就别再让人点创建/加入
   $("roomCode").textContent = info.code;
   $("roomHint").textContent = `把房间号或这个链接发给朋友：${location.origin}/#join-${info.code}`;
   $("roomMembers").innerHTML = info.members.map((m) => {
-    const me = info.you && m.name === info.you.name && m.seat === info.you.seat;
+    const me = info.you && m.id === info.you.id;
+    const kick = info.is_host && !m.host && info.status !== "running"
+      ? `<i class="kick" data-id="${m.id}" title="移出房间">×</i>` : "";
     return `<span class="${m.host ? "host" : ""}${me ? " me" : ""}">${esc(m.name)}${
-      m.seat ? " · " + m.seat + "号" : ""}</span>`;
+      m.seat ? " · " + m.seat + "号" : ""}${kick}</span>`;
   }).join("") + `<span>${info.count}/${info.max} 人 · 空位交给模型</span>`;
+  $("roomMembers").querySelectorAll(".kick").forEach((el) =>
+    el.addEventListener("click", async () => {
+      try { renderRoom((await post(`/api/room/${R.code}/kick`,
+                                   { token: R.token, id: el.dataset.id })).room); }
+      catch (e) { alert(e.message); }
+    }));
   $("btnRoomStart").hidden = !info.is_host || info.status === "running";
   $("btnRoomStart").textContent = info.status === "running" ? "进行中" : "开始（房主）";
 }
@@ -283,12 +292,18 @@ async function pollRoom() {
   } catch (_) {}
 }
 
+function setJoinUI(on) {
+  $("nickName").hidden = !on;
+  document.querySelectorAll(".lobby .row2").forEach((el) => { el.hidden = !on; });
+}
+
 function leaveRoom() {
   if (R.code) post(`/api/room/${R.code}/leave`, { token: R.token }).catch(() => {});
   R.code = R.token = null; R.host = false;
   clearInterval(R.poll); R.poll = null;
   try { localStorage.removeItem("ww_room"); } catch (_) {}
   $("roomBox").hidden = true;
+  setJoinUI(true);
   if (S.es) { S.es.close(); S.es = null; }
 }
 
@@ -662,12 +677,14 @@ $("modeSel").addEventListener("change", syncModeUI);
 syncModeUI();
 
 $("btnCreate").addEventListener("click", async () => {
+  if (R.code) return;                            // 已经在房间里了
   unlockAudio();
   try { enterRoom(await post("/api/room", { name: $("nickName").value })); }
   catch (e) { alert(e.message); }
 });
 
 $("btnJoin").addEventListener("click", async () => {
+  if (R.code) return;
   unlockAudio();
   const code = $("joinCode").value.trim();
   if (!/^\d{5}$/.test(code)) { alert("房间号是 5 位数字"); return; }

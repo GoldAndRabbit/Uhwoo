@@ -209,7 +209,7 @@ async def room_create(body: dict[str, Any] = Body(default={})) -> dict[str, Any]
 async def room_join(code: str, body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     r = _room_or_404(code)
     try:
-        me = r.join(str(body.get("name", "")))
+        me = r.join(str(body.get("name", "")), token=str(body.get("token", "")))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from None
     return {"code": r.code, "token": me.token, "room": r.public(me.token)}
@@ -229,6 +229,19 @@ async def room_leave(code: str, body: dict[str, Any] = Body(default={})) -> dict
     r = _room_or_404(code)
     r.leave(str(body.get("token", "")))
     return {"ok": True}
+
+
+@app.post("/api/room/{code}/kick")
+async def room_kick(code: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    r = _room_or_404(code)
+    me = r.member(str(body.get("token", "")))
+    if not me or not me.host:
+        raise HTTPException(403, "只有房主能踢人")
+    try:
+        ok = r.kick(str(body.get("id", "")))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    return {"ok": ok, "room": r.public(me.token)}
 
 
 @app.post("/api/room/{code}/start")

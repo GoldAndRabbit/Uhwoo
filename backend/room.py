@@ -23,12 +23,13 @@ ROOM_TTL = 6 * 3600          # 空置 6 小时就回收
 class Member:
     token: str
     name: str
+    mid: str = field(default_factory=lambda: secrets.token_hex(3))
     host: bool = False
     seat: int | None = None
     joined_at: float = field(default_factory=time.time)
 
     def public(self) -> dict[str, Any]:
-        return {"name": self.name, "host": self.host, "seat": self.seat}
+        return {"id": self.mid, "name": self.name, "host": self.host, "seat": self.seat}
 
 
 @dataclass
@@ -42,7 +43,9 @@ class Room:
     touched_at: float = field(default_factory=time.time)
 
     # ---------- 成员 ----------
-    def join(self, name: str, host: bool = False) -> Member:
+    def join(self, name: str, host: bool = False, token: str = "") -> Member:
+        if token and token in self.members:      # 重复点/刷新回来的，直接返回原成员
+            return self.members[token]
         if self.game and self.game.status == "running":
             raise ValueError("这局已经开始了，等下一局吧")
         if len(self.members) >= MAX_HUMANS:
@@ -55,6 +58,17 @@ class Room:
     def leave(self, token: str) -> None:
         self.members.pop(token, None)
         self.touch()
+
+    def kick(self, mid: str) -> bool:
+        """房主踢人。只在开局前有效，开局后座位已经定了。"""
+        if self.game and self.game.status == "running":
+            raise ValueError("对局已经开始，踢不了了")
+        for tok, m in list(self.members.items()):
+            if m.mid == mid and not m.host:
+                self.members.pop(tok)
+                self.touch()
+                return True
+        return False
 
     def member(self, token: str) -> Member | None:
         return self.members.get(token)
