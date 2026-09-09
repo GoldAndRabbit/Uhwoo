@@ -130,3 +130,8 @@
 2026-09-09T16:39:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
 2026-09-09T16:41:44Z ERR  error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp [::1]:8130: connect: connection refused" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
 2026-09-09T16:41:44Z ERR Request failed error="Unable to reach the origin service. The service may be down or it may not be responding to traffic from cloudflared: dial tcp [::1]:8130: connect: connection refused" connIndex=1 dest=https://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T16:44:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
+2026-09-09T16:49:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
+2026-09-09T16:52:08Z ERR  error="stream 3649 canceled by remote with error code 0" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T16:52:08Z ERR Request failed error="stream 3649 canceled by remote with error code 0" connIndex=1 dest=https://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T16:54:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"

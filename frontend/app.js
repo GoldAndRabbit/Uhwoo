@@ -210,10 +210,23 @@ function connect() {
     const msg = JSON.parse(e.data);
     if (msg.type === "idle") return;
     if (msg.type === "snapshot") {
-      S.state = msg.data.state; S.events = msg.data.events; S.calls = msg.data.calls;
+      // SSE 断线重连时服务端会重发完整快照。如果这会儿正在按语音节奏演出，
+      // 直接整份替换会把还没念到的发言一次性铺出来 —— 只把新事件排进队列。
+      const busy = TTS.on && TTS.ok && (Q.busy || Q.items.length);
+      S.state = msg.data.state;
       if (TTS.ok && S.state.status === "running") {
         TTS.on = !!S.state.tts && $("ttsOn").checked;
       }
+      if (busy) {
+        const known = new Set(S.events.map((e) => e.id));
+        Q.items.forEach((i) => { if (i.type === "event") known.add(i.ev.id); });
+        msg.data.events.filter((x) => !known.has(x.id))       // e 是外层的 MessageEvent，别遮蔽
+          .forEach((ev) => present({ type: "event", ev, state: msg.data.state }));
+        S.calls = msg.data.calls;
+        renderCalls(); renderPlayers(); renderMeBar();
+        return;
+      }
+      S.events = msg.data.events; S.calls = msg.data.calls;
       renderAsk(S.state.pending);        // 刷新页面时如果正轮到你，把问题接回来
       renderAll(); return;
     }
