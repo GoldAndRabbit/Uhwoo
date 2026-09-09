@@ -119,6 +119,11 @@ details[open] summary::before{content:"▾ ";}
 .only{flex:0 0 auto;border:1px solid #e7c9c9;color:#a33b2c;background:#fdf3f2;border-radius:11px;
       padding:1px 9px;font-size:11px;white-space:nowrap;margin-top:7px;}
 .bubble{background:#f4f2ee;border-radius:10px;padding:7px 12px;max-width:860px;}
+.bubble.revealing{min-height:1.65em;}
+.bubble.revealing::after{content:"";display:inline-block;width:2px;height:1em;
+  vertical-align:-2px;margin-left:1px;background:currentColor;opacity:.35;
+  animation:caret .8s steps(2) infinite;}
+@keyframes caret{0%,100%{opacity:.35}50%{opacity:0}}
 .bubble.say{cursor:pointer;}
 .bubble.say:hover{background:#eeebe5;}
 .bubble.plain{background:#f8f7f4;color:#6b6558;font-size:12px;}

@@ -153,6 +153,7 @@ function playBtn(ev) {
 }
 
 function rowHTML(ev) {
+  const rid = ` data-eid="${ev.id}"`;
   const only = audienceLabel(ev.audience);
   const onlyTag = only
     ? `<span class="only" title="这条事件只进这些人的上下文，别人拿不到">${only}</span>` : "";
@@ -166,24 +167,24 @@ function rowHTML(ev) {
   if (ev.kind === "speech") {
     const seat = ev.seat, role = roleOf(seat);
     const body = ev.text.replace(/^[^：]*：/, "");
-    return `<div class="row"><div class="who">${avatar(role)}
+    return `<div class="row"${rid}><div class="who">${avatar(role)}
         <span class="badge r-${role || "平民"}">${seat}号${role ? " " + role : ""}</span></div>
       <div class="bubble say">${esc(body)}</div>${playBtn(ev)}</div>`;
   }
   if (ev.kind === "vote")
     return `<div class="row"><div class="bubble plain vote">${esc(ev.text)}</div>${onlyTag}</div>`;
   if (ev.kind === "judge")
-    return `<div class="row"><span class="badge judge">法官</span>
+    return `<div class="row"${rid}><span class="badge judge">法官</span>
       <div class="bubble judgeline">${esc(ev.text)}</div>${playBtn(ev)}</div>`;
   if (ev.kind === "result")
-    return `<div class="row"><span class="badge judge">法官</span>
+    return `<div class="row"${rid}><span class="badge judge">法官</span>
       <div class="bubble result">${esc(ev.text)}</div>${playBtn(ev)}</div>`;
   if (ev.kind === "night_action") {
     const role = ev.seat ? roleOf(ev.seat) : "";
     const badge = ev.seat
       ? `<div class="who">${avatar(role)}
            <span class="badge r-${role || "平民"}">${ev.seat}号${role ? " " + role : ""}</span></div>` : "";
-    return `<div class="row">${badge}
+    return `<div class="row"${rid}>${badge}
       <div class="bubble ${only ? "wolfnight" : ""}">${esc(ev.text)}</div>${onlyTag}${playBtn(ev)}</div>`;
   }
   return `<div class="row"><div class="bubble plain">${esc(ev.text)}</div>${onlyTag}</div>`;
@@ -379,6 +380,37 @@ async function audioURL(seat, text) {
   return p;
 }
 
+// 自动朗读时，文字跟着音频逐字浮出来 —— 按 currentTime/duration 推进，
+// 所以念多快字就出多快，不是固定速度的打字机
+function startReveal(ev) {
+  const el = document.querySelector(`.row[data-eid="${ev.id}"] .bubble`);
+  if (!el) return () => {};
+  const full = el.textContent;
+  el.textContent = "";
+  el.classList.add("revealing");
+  const box = $("log").parentElement;
+  let stopped = false;
+  const tick = () => {
+    if (stopped) return;
+    const a = TTS.audio, d = a.duration;
+    if (d && isFinite(d) && d > 0) {
+      const n = Math.ceil(full.length * Math.min(1, a.currentTime / d));
+      if (n !== el.textContent.length) {
+        el.textContent = full.slice(0, n);
+        box.scrollTop = box.scrollHeight;
+      }
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return () => {                       // 播完/被打断都要把整句补齐，别卡在半截
+    stopped = true;
+    el.textContent = full;
+    el.classList.remove("revealing");
+    box.scrollTop = box.scrollHeight;
+  };
+}
+
 function markPlaying(eid) {
   TTS.playingId = eid;
   document.querySelectorAll(".play").forEach((b) => {
@@ -458,7 +490,9 @@ async function drain() {
     if (line && line.text) {
       const next = Q.items.find((x) => x.type === "event" && narration(x.ev));
       if (next) audioURL(narration(next.ev).seat, narration(next.ev).text).catch(() => {});
+      const done = startReveal(it.ev);
       await playLine(line.seat, line.text, it.ev.id);
+      done();
       // 被浏览器的自动播放策略拦了：文字继续往下走，别把已经渲染过的这条塞回队首
       // （塞回去会在续播时二次渲染，就是「同一句出现两遍」的来源）
     } else {
