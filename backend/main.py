@@ -7,8 +7,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import tts
@@ -19,6 +19,15 @@ from .llm_api import load_config
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 app = FastAPI(title="Multi-agent-werewolf")
+
+
+@app.middleware("http")
+async def force_https(request: Request, call_next):
+    """隧道进来的请求带 x-forwarded-proto。走 http 的话浏览器地址栏会挂「不安全」小三角，
+    这里直接 301 到 https。本机 127.0.0.1 调试不受影响。"""
+    if request.headers.get("x-forwarded-proto") == "http":
+        return RedirectResponse(str(request.url).replace("http://", "https://", 1), status_code=301)
+    return await call_next(request)
 
 _game: Game | None = None
 _task: asyncio.Task | None = None
