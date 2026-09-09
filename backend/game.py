@@ -90,6 +90,11 @@ class Game:
 
     def stop(self) -> None:
         self._stop = True
+        # 正等着你回答的话，这里必须把那个 future 叫醒 —— 否则引擎会一直挂在 await 上，
+        # 要等 300s 超时才发现该停了（表现就是「停止按钮按不动」）。
+        if self._answer and not self._answer.done():
+            self._answer.cancel()
+        self._push({"type": "state", "state": self.state()})
 
     def _check_stop(self) -> None:
         if self._stop:
@@ -196,6 +201,8 @@ class Game:
             return await asyncio.wait_for(self._answer, self.ANSWER_TIMEOUT)
         except asyncio.TimeoutError:
             return None
+        except asyncio.CancelledError:
+            return None                 # 被 stop() 取消，交给下面的 _check_stop 收尾
         finally:
             self.pending = None
             self._answer = None
@@ -211,7 +218,7 @@ class Game:
         if p.seat == self.human:
             pool = list((schema.get("properties", {}).get("target") or {}).get("enum") or [])
             ans = await self._ask_human(p, kind, title, instruction, pool)
-            self._check_stop()
+            self._check_stop()          # 停止是在这里生效的
             if ans is not None:
                 parsed = {"thinking": "（你自己的判断）", **ans}
                 raw = json.dumps(parsed, ensure_ascii=False, indent=2)
