@@ -366,11 +366,11 @@ document.addEventListener("pointerdown", () => { unlockAudio(); if (TTS.blocked)
                           { capture: true });
 
 async function audioURL(seat, text) {
-  const key = seat + "|" + text;
+  const key = seat + "|" + text + "|" + ($("cloneOn").checked ? "c" : "p");
   if (TTS.urls.has(key)) return TTS.urls.get(key);
   const p = fetch("/api/tts", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ seat, text }),
+    body: JSON.stringify({ seat, text, clone: $("cloneOn").checked }),
   }).then(async (r) => {
     if (!r.ok) throw new Error((await r.json()).detail || r.status);
     return URL.createObjectURL(await r.blob());
@@ -491,6 +491,7 @@ async function startGame() {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: $("modelSel").value, tts: TTS.on, mode: $("modeSel").value,
+      clone: $("cloneOn").checked,
       role: $("modeSel").value === "play" ? $("roleSel").value : "",
     }),
   });
@@ -530,6 +531,12 @@ $("btnStop").addEventListener("click", stopGame);
 $("barNew").addEventListener("click", startGame);
 $("barStop").addEventListener("click", stopGame);
 
+$("cloneOn").addEventListener("change", (e) => {
+  try { localStorage.setItem("ww_clone", e.target.checked ? "1" : "0"); } catch (_) {}
+  TTS.urls.clear();                    // 换了音色，之前那些 blob 不能再用
+  stopSpeaking();
+});
+
 $("ttsOn").addEventListener("change", (e) => {
   if (e.target.checked) unlockAudio();
   TTS.on = TTS.ok && e.target.checked;
@@ -558,6 +565,11 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
   $("modelSel").innerHTML = cfg.models
     .map((m) => `<option value="${m}"${m === cfg.model ? " selected" : ""}>${m}</option>`).join("");
   TTS.ok = !!cfg.tts;
+  $("cloneOn").checked = cfg.clone_default !== false;
+  try {
+    const c = localStorage.getItem("ww_clone");
+    if (c !== null) $("cloneOn").checked = c === "1";
+  } catch (_) {}
   if (!TTS.ok) {
     $("ttsOn").disabled = true;
     $("ttsOn").parentElement.title = "未配置 DASHSCOPE_API_KEY / ALIYUN_BAILIAN_API_KEY";

@@ -25,9 +25,11 @@ class Game:
 
     def __init__(self, gid: str, seed: int | None = None, use_api: bool | None = None,
                  model: str | None = None, tts: bool = False, mode: str = "sim",
-                 human_seat: int | None = None, human_role: str | None = None):
+                 human_seat: int | None = None, human_role: str | None = None,
+                 clone: bool | None = None):
         self.gid = gid
         self.tts = bool(tts) and tts_mod.available()
+        self.clone = tts_mod.load_tts_config().clone_default_on if clone is None else bool(clone)
         self.mode = mode if mode in ("sim", "play") else "sim"
         self.seed = seed if seed is not None else random.randrange(10**6)
         self.rng = random.Random(self.seed)
@@ -147,7 +149,7 @@ class Game:
 
         async def go() -> None:
             try:
-                await tts_mod.synthesize(text[:400], seat)
+                await tts_mod.synthesize(text[:400], seat, clone=self.clone)
             except Exception:
                 pass
 
@@ -299,6 +301,7 @@ class Game:
             "seed": self.seed,
             "model": self.llm.model,
             "tts": self.tts,
+            "clone": self.clone,
             "reveal": reveal,
             "alive": self.alive,
             "calls": len(self.calls),

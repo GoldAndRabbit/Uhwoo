@@ -47,6 +47,7 @@ async def config() -> dict[str, Any]:
         "models": list(cfg.models),
         "note": f"{cfg.provider}" if ok else "mock（未检测到 ALIYUN_BAILIAN_API_KEY）",
         "tts": tts.available(),
+        "clone_default": tts.load_tts_config().clone_default_on,
     }
 
 
@@ -67,7 +68,7 @@ async def start(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     if role and role not in [r.value for r in Role]:
         raise HTTPException(400, f"未知身份 {role}")
     _game = Game(gid, model=model, tts=bool(body.get("tts")), mode=mode,
-                 human_seat=body.get("seat"), human_role=role)
+                 human_seat=body.get("seat"), human_role=role, clone=body.get("clone"))
     _task = asyncio.create_task(_game.run())
     return {"gid": gid, "state": _game.state()}
 
@@ -149,7 +150,9 @@ async def speak(body: dict[str, Any] = Body(...)) -> Response:
         raise HTTPException(503, "TTS 未启用（缺 DASHSCOPE_API_KEY / ALIYUN_BAILIAN_API_KEY 或未装 dashscope）")
     seat = body.get("seat")
     try:
-        audio = await tts.synthesize(text[:400], int(seat) if seat is not None else None)
+        clone = body.get("clone")
+        audio = await tts.synthesize(text[:400], int(seat) if seat is not None else None,
+                                     clone=None if clone is None else bool(clone))
     except Exception as exc:
         raise HTTPException(502, f"合成失败：{type(exc).__name__}: {exc}") from exc
     return Response(audio, media_type="audio/mpeg",

@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -40,6 +41,17 @@ class TtsConfig:
     voice: str = "longanhuan_v3.6"
     websocket_url: str | None = None       # 需要指定业务空间/地域时填
     seats: dict[int, dict[str, float]] = field(default_factory=lambda: DEFAULT_SEAT_STYLES)
+    # 音色克隆：一人一把真嗓子，慢一档但辨识度高
+    clone_default_on: bool = True
+    clone_model: str = "cosyvoice-v2"
+    clone_voices: dict[int, str] = field(default_factory=dict)
+
+    def pick(self, seat: int | None, clone: bool) -> tuple[str, str, dict[str, float]]:
+        """选模型和音色：克隆音色自带音高语速，不再叠加 seats 里的微调。"""
+        vid = self.clone_voices.get(seat if seat is not None else 0)
+        if clone and vid:
+            return self.clone_model, vid, {}
+        return self.model, self.voice, self.seats.get(seat or 0, {})
 
 
 @lru_cache(maxsize=1)
@@ -58,12 +70,17 @@ def load_tts_config() -> TtsConfig:
         if isinstance(v, dict):
             seats[int(k)] = {"pitch_rate": float(v.get("pitch_rate", 1.0)),
                              "speech_rate": float(v.get("speech_rate", 1.0))}
+    clone = raw.get("clone") or {}
+    voices = {int(k): str(v) for k, v in (clone.get("voices") or {}).items()}
     return TtsConfig(
         enabled=bool(raw.get("enabled", True)),
         model=raw.get("model") or "qwen-audio-3.0-tts-flash",
         voice=raw.get("voice") or "longanhuan_v3.6",
         websocket_url=raw.get("websocket_url"),
         seats=seats,
+        clone_default_on=bool(clone.get("default_on", True)) and bool(voices),
+        clone_model=clone.get("model") or "cosyvoice-v2",
+        clone_voices=voices,
     )
 
 
@@ -83,47 +100,57 @@ def available() -> bool:
     return True
 
 
-def _cache_path(cfg: TtsConfig, seat: int | None, text: str) -> Path:
-    key = f"{cfg.model}|{cfg.voice}|{seat}|{text}".encode("utf-8")
+def _cache_path(model: str, voice: str, seat: int | None, text: str) -> Path:
+    key = f"{model}|{voice}|{seat}|{text}".encode("utf-8")
     return CACHE_DIR / f"{hashlib.sha1(key).hexdigest()}.mp3"
 
 
-def _synth_blocking(cfg: TtsConfig, seat: int | None, text: str) -> bytes:
+def _synth_blocking(model: str, voice: str, style: dict[str, float], text: str) -> bytes:
     import dashscope
     from dashscope.audio.tts_v2 import SpeechSynthesizer
 
+    cfg = load_tts_config()
     dashscope.api_key = api_key()
     if cfg.websocket_url:
         dashscope.base_websocket_api_url = cfg.websocket_url
-    style = cfg.seats.get(seat or 0, {})
-    syn = SpeechSynthesizer(model=cfg.model, voice=cfg.voice,
-                            pitch_rate=style.get("pitch_rate", 1.0),
-                            speech_rate=style.get("speech_rate", 1.0))
-    audio = syn.call(text)
-    if not audio:
-        raise RuntimeError("TTS 返回空音频")
-    logger.info("TTS %s 字，首包 %.0fms，request_id=%s",
-                len(text), syn.get_first_package_delay() or 0, syn.get_last_request_id())
-    return bytes(audio)
+    last: Exception | None = None
+    for attempt in range(3):                 # websocket 偶发 5s 内连不上，重试一次基本就好
+        try:
+            syn = SpeechSynthesizer(model=model, voice=voice,
+                                    pitch_rate=style.get("pitch_rate", 1.0),
+                                    speech_rate=style.get("speech_rate", 1.0))
+            audio = syn.call(text)
+            if not audio:
+                raise RuntimeError("TTS 返回空音频")
+            logger.info("TTS %s/%s %s 字，首包 %.0fms", model, voice, len(text),
+                        syn.get_first_package_delay() or 0)
+            return bytes(audio)
+        except Exception as exc:
+            last = exc
+            time.sleep(0.8 * (attempt + 1))
+    raise last if last else RuntimeError("TTS 失败")
 
 
 _locks: dict[str, asyncio.Lock] = {}
 
 
-async def synthesize(text: str, seat: int | None = None) -> bytes:
+async def synthesize(text: str, seat: int | None = None, clone: bool | None = None) -> bytes:
     """合成一句话，命中磁盘缓存就直接返回。同一句并发请求只合成一次。"""
     cfg = load_tts_config()
     text = text.strip()
     if not text:
         raise ValueError("空文本")
-    path = _cache_path(cfg, seat, text)
+    if clone is None:
+        clone = cfg.clone_default_on
+    model, voice, style = cfg.pick(seat, clone)
+    path = _cache_path(model, voice, seat, text)
     if path.exists():
         return path.read_bytes()
     lock = _locks.setdefault(path.name, asyncio.Lock())
     async with lock:
         if path.exists():
             return path.read_bytes()
-        audio = await asyncio.to_thread(_synth_blocking, cfg, seat, text)
+        audio = await asyncio.to_thread(_synth_blocking, model, voice, style, text)
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         path.write_bytes(audio)
         return audio

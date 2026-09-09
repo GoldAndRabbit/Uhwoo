@@ -6,3 +6,5 @@ logs/
 data/tts/
 # 原图 20MB+，仓库里只放 frontend/img/roles 下的 320px 版本
 assets/
+# 参考音频是从 pitchasso 复用的真人素材，不进仓库
+frontend/ref_audio/

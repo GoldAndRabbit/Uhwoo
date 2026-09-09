@@ -28,18 +28,35 @@ werewolf:
   enable_thinking: false
   timeout: 90
 
-# 朗读白天的发言。鉴权用 DASHSCOPE_API_KEY，没有就退回 ALIYUN_BAILIAN_API_KEY。
-# 目前 qwen-audio-3.0-tts 只有 longanhuan_v3.6 一个音色，所以用音高/语速区分 6 个座位。
+# 朗读发言。鉴权用 DASHSCOPE_API_KEY，没有就退回 ALIYUN_BAILIAN_API_KEY。
 tts:
   enabled: true
+  # 不开音色克隆时用的预置音色：快（约 0.85s/句），但 6 个人是同一把嗓子，
+  # 只能靠 seats 里的音高/语速拉开一点差别
   model: qwen-audio-3.0-tts-flash
   voice: longanhuan_v3.6
-  # websocket_url: wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference
   seats:
-    0: {pitch_rate: 0.90, speech_rate: 0.92}   # 法官：只报天数、死讯、票型
+    0: {pitch_rate: 0.90, speech_rate: 0.92}   # 法官
     1: {pitch_rate: 1.00, speech_rate: 1.05}
     2: {pitch_rate: 0.88, speech_rate: 1.00}
     3: {pitch_rate: 1.12, speech_rate: 1.10}
     4: {pitch_rate: 0.94, speech_rate: 1.15}
     5: {pitch_rate: 1.06, speech_rate: 0.98}
     6: {pitch_rate: 0.82, speech_rate: 1.08}
+
+  # 音色克隆：参考音频复用自 pitchasso 的 ref_audios（4 男 3 女），
+  # 通过 https://uhwoo.com/static/ref_audio/*.wav 注册给 DashScope，
+  # 注册是一次性的，之后 voice id 和预置音色一样用，不必再传参考音频。
+  # 代价是慢一档：约 3.2s/句（cosyvoice-v2 本身比 flash 慢 1.2s，克隆再加 1.2s），
+  # 但事件一落地就在后台预热，通常被上一句的播放时间盖掉。
+  clone:
+    default_on: true
+    model: cosyvoice-v2
+    voices:
+      0: cosyvoice-v2-uhwoo-8088dbf3c81b4bb1b9dad7ef57371a6c   # 法官 · wu_gang
+      1: cosyvoice-v2-uhwoo-5267e6b1e9864df7bdac6f3d5baaecfb   # wang_chu_qi
+      2: cosyvoice-v2-uhwoo-9aeaea7d89f34dc8929a3d8ed22a3de6   # gao_yuan_yuan
+      3: cosyvoice-v2-uhwoo-096caefbd6a44ce8bda7876a1d055734   # zhan_jun
+      4: cosyvoice-v2-uhwoo-11ac76afc9a940358e36ab25b2919ccb   # lin_zhi_lin
+      5: cosyvoice-v2-uhwoo-541d552e5e804ea3b672b80f048f276e   # xu_jing_yu
+      6: cosyvoice-v2-uhwoo-878665349a29486fa59d6ed6e9f5aaf7   # dee_hsu
