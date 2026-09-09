@@ -14,6 +14,7 @@
       <select id="modeSel">
         <option value="sim">模拟模式 · 6 个 agent 自己打</option>
         <option value="play" selected>单人模式</option>
+        <option value="multi">多人模式 · 和朋友一起玩</option>
       </select>
     </label>
     <label class="field" id="roleField" hidden>身份
@@ -25,6 +26,22 @@
         <option value="平民">平民</option>
       </select>
     </label>
+    <div id="lobby" class="lobby" hidden>
+      <input id="nickName" type="text" maxlength="12" placeholder="你的昵称">
+      <div class="row2">
+        <button id="btnCreate" class="btn">创建房间</button>
+      </div>
+      <div class="row2">
+        <input id="joinCode" type="text" inputmode="numeric" maxlength="5" placeholder="5 位房间号">
+        <button id="btnJoin" class="btn">加入</button>
+      </div>
+      <div id="roomBox" hidden>
+        <div class="roomcode">房间号 <b id="roomCode"></b><span id="roomHint">把它告诉朋友</span></div>
+        <div id="roomMembers" class="members"></div>
+        <button id="btnRoomStart" class="btn primary" hidden>开始（房主）</button>
+        <button id="btnLeave" class="btn dashed">退出房间</button>
+      </div>
+    </div>
     <div id="meCard" class="me" hidden></div>
     <label class="field">模型
       <select id="modelSel"></select>

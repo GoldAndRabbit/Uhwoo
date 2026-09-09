@@ -26,11 +26,12 @@ class Game:
     def __init__(self, gid: str, seed: int | None = None, use_api: bool | None = None,
                  model: str | None = None, tts: bool = False, mode: str = "sim",
                  human_seat: int | None = None, human_role: str | None = None,
-                 clone: bool | None = None):
+                 clone: bool | None = None, humans: int = 0,
+                 names: dict[int, str] | None = None):
         self.gid = gid
         self.tts = bool(tts) and tts_mod.available()
         self.clone = tts_mod.load_tts_config().clone_default_on if clone is None else bool(clone)
-        self.mode = mode if mode in ("sim", "play") else "sim"
+        self.mode = mode if mode in ("sim", "play", "multi") else "sim"
         self.seed = seed if seed is not None else random.randrange(10**6)
         self.rng = random.Random(self.seed)
         self.llm = LLMClient(use_api=use_api, seed=self.seed, model=model)
@@ -59,19 +60,24 @@ class Game:
         self.claimed_seer: int | None = None
         self.suspicion: dict[int, float] = {p.seat: 0.0 for p in self.players}
 
-        # 单人模式：坐一个座位，其余 5 个交给模型。视野严格按这个座位裁。
-        # 指定了身份就从该身份的座位里挑一个（2 狼 2 民各有两个位置），否则随机坐。
-        self.human: int | None = None
+        # 有人坐的座位，其余交给模型。视野严格按座位裁。
+        # 单人模式可以指定身份（从该身份的座位里挑一个）；多人模式按人数随机分座位。
+        self.humans: set[int] = set()
         if self.mode == "play":
             if human_seat in range(1, 7):
-                self.human = human_seat
+                self.humans = {human_seat}
             elif human_role:
                 pool = [p.seat for p in self.players if p.role.value == human_role]
-                self.human = self.rng.choice(pool) if pool else self.rng.randint(1, 6)
+                self.humans = {self.rng.choice(pool) if pool else self.rng.randint(1, 6)}
             else:
-                self.human = self.rng.randint(1, 6)
-        self.pending: dict[str, Any] | None = None     # 当前等你回答的问题
-        self._answer: asyncio.Future | None = None
+                self.humans = {self.rng.randint(1, 6)}
+        elif self.mode == "multi":
+            seats = list(range(1, 7))
+            self.rng.shuffle(seats)
+            self.humans = set(seats[:max(1, min(6, humans))])
+        self.names: dict[int, str] = dict(names or {})
+        self.pending: dict[int, dict[str, Any]] = {}   # 座位 -> 正在等他回答的问题
+        self._answers: dict[int, asyncio.Future] = {}
 
         self._subs: list[asyncio.Queue] = []
         self._stop = False
@@ -88,30 +94,47 @@ class Game:
     def player(self, seat: int) -> Player:
         return self.players[seat - 1]
 
-    def subscribe(self) -> asyncio.Queue:
+    def single_viewer(self) -> int | None:
+        """旧的单人/模拟接口只有一个视角：单人模式就是那个座位，模拟模式是上帝视角。"""
+        return next(iter(self.humans)) if len(self.humans) == 1 else None
+
+    def subscribe(self, viewer: int | None = None) -> asyncio.Queue:
+        """viewer=座位号表示这个连接只能看到那个座位的视野；None 是上帝视角。"""
         q: asyncio.Queue = asyncio.Queue()
-        self._subs.append(q)
+        self._subs.append((q, viewer))
         return q
 
     def unsubscribe(self, q: asyncio.Queue) -> None:
-        if q in self._subs:
-            self._subs.remove(q)
+        self._subs = [(x, v) for x, v in self._subs if x is not q]
 
     def stop(self) -> None:
         self._stop = True
         # 正等着你回答的话，这里必须把那个 future 叫醒 —— 否则引擎会一直挂在 await 上，
         # 要等 300s 超时才发现该停了（表现就是「停止按钮按不动」）。
-        if self._answer and not self._answer.done():
-            self._answer.cancel()
-        self._push({"type": "state", "state": self.state()})
+        for fut in list(self._answers.values()):
+            if not fut.done():
+                fut.cancel()
+        self._push({"type": "state"})
 
     def _check_stop(self) -> None:
         if self._stop:
             raise GameStopped()
 
     def _push(self, payload: dict[str, Any]) -> None:
-        for q in list(self._subs):
-            q.put_nowait(payload)
+        """按每个连接自己的视角裁剪后再投递 —— 多人局里每个人看到的东西都不一样。"""
+        for q, viewer in list(self._subs):
+            kind = payload.get("type")
+            if kind == "event" and not self._visible_raw(payload["_ev"], viewer):
+                out = {"type": "state"}
+            elif kind == "call" and not self._call_visible_raw(payload["_call"], viewer):
+                out = {"type": "state"}
+            elif kind == "prompt" and payload.get("seat") != viewer:
+                continue                       # 别人的回合不推给你
+            else:
+                out = {k: v for k, v in payload.items() if not k.startswith("_")}
+            out = dict(out)
+            out["state"] = self.state(viewer)
+            q.put_nowait(out)
 
     def _emit(self, kind: str, text: str, audience: Any = "all", seat: int | None = None,
               stream: str = "state", **meta) -> Event:
@@ -120,10 +143,7 @@ class Game:
         self.events.append(ev)
         if self.tts:
             self._warm_tts(ev)
-        if self._visible(ev):
-            self._push({"type": "event", "data": ev.to_json(), "state": self.state()})
-        else:
-            self._push({"type": "state", "state": self.state()})
+        self._push({"type": "event", "data": ev.to_json(), "_ev": ev})
         return ev
 
     JUDGE_VOICE = 0          # 法官（上帝）：只报天数、死讯和票型，用 0 号音色
@@ -134,7 +154,7 @@ class Game:
             return ev.seat, ev.text.split("：", 1)[-1]
         if ev.kind in ("result", "judge"):
             return self.JUDGE_VOICE, ev.text
-        if ev.kind == "night_action" and self.human is not None:
+        if ev.kind == "night_action" and self.humans:
             if ev.seat and "：" in ev.text:            # 狼队商议是角色在说
                 return ev.seat, ev.text.split("：", 1)[-1]
             return self.JUDGE_VOICE, ev.text
@@ -159,20 +179,17 @@ class Game:
         """法官（上帝）报幕。纯固定台词，不过模型，两种模式都有。"""
         return self._emit("judge", text)
 
-    def _visible(self, ev: Event) -> bool:
-        """模拟模式是上帝视角，全看得到；单人模式只推你这个座位看得到的。"""
-        return self.human is None or ev.visible_to(self.human)
+    def _visible_raw(self, ev: Event, viewer: int | None) -> bool:
+        """模拟模式（viewer=None）是上帝视角；有座位的人只看得到自己视野内的事件。"""
+        return viewer is None or ev.visible_to(viewer)
 
-    def _call_visible(self, c: LLMCall) -> bool:
-        """单人模式下别人的上下文和系统结算（含全部身份）都不能推给你。"""
-        return self.human is None or c.seat == self.human
+    def _call_visible_raw(self, c: LLMCall, viewer: int | None) -> bool:
+        """别人的上下文和系统结算（含全部身份）都不能推给坐在局里的人。"""
+        return viewer is None or c.seat == viewer
 
     def _record(self, call: LLMCall) -> None:
         self.calls.append(call)
-        if self._call_visible(call):
-            self._push({"type": "call", "data": call.to_json(), "state": self.state()})
-        else:
-            self._push({"type": "state", "state": self.state()})
+        self._push({"type": "call", "data": call.to_json(), "_call": call})
 
     # ---------- 上下文 ----------
     def _delta_for(self, p: Player, instruction: str) -> str:
@@ -208,35 +225,38 @@ class Game:
             **extra,
         }
 
-    def answer(self, payload: dict[str, Any]) -> bool:
-        """前端把你的选择/发言送进来，唤醒正在等你的那一步。"""
-        if not self.pending or not self._answer or self._answer.done():
+    def answer(self, seat: int, payload: dict[str, Any]) -> bool:
+        """前端把某个座位的选择/发言送进来，唤醒正在等他的那一步。"""
+        fut = self._answers.get(seat)
+        if seat not in self.pending or not fut or fut.done():
             return False
-        self._answer.set_result(payload)
+        fut.set_result(payload)
         return True
 
     async def _ask_human(self, p: Player, kind: str, title: str, instruction: str,
                          options: list[int]) -> dict[str, Any] | None:
         """轮到你了：把问题推给前端，等你回答；超时返回 None 交给模型代打。"""
         loop = asyncio.get_running_loop()
-        self._answer = loop.create_future()
+        fut = loop.create_future()
+        self._answers[p.seat] = fut
         # 给人看的提示不用带 JSON 字段说明，那是给模型的
         human_text = instruction.split("输出 JSON")[0].strip()
-        self.pending = {"kind": kind, "seat": p.seat, "title": title,
-                        "instruction": human_text, "options": options,
-                        "field": "speech" if kind == "speech" else "target",
-                        "timeout": self.ANSWER_TIMEOUT, "asked_at": time.time()}
-        self._push({"type": "prompt", "data": self.pending, "state": self.state()})
+        q = {"kind": kind, "seat": p.seat, "title": title,
+             "instruction": human_text, "options": options,
+             "field": "speech" if kind == "speech" else "target",
+             "timeout": self.ANSWER_TIMEOUT, "asked_at": time.time()}
+        self.pending[p.seat] = q
+        self._push({"type": "prompt", "data": q, "seat": p.seat})
         try:
-            return await asyncio.wait_for(self._answer, self.ANSWER_TIMEOUT)
+            return await asyncio.wait_for(fut, self.ANSWER_TIMEOUT)
         except asyncio.TimeoutError:
             return None
         except asyncio.CancelledError:
             return None                 # 被 stop() 取消，交给下面的 _check_stop 收尾
         finally:
-            self.pending = None
-            self._answer = None
-            self._push({"type": "prompt", "data": None, "state": self.state()})
+            self.pending.pop(p.seat, None)
+            self._answers.pop(p.seat, None)
+            self._push({"type": "prompt", "data": None, "seat": p.seat})
 
     async def _ask(self, p: Player, kind: str, title: str, instruction: str,
                    schema: dict, **mock_extra) -> dict[str, Any]:
@@ -245,7 +265,7 @@ class Game:
         p.messages.append({"role": "user", "content": delta})
         ctx_chars = p.ctx_chars
 
-        if p.seat == self.human:
+        if p.seat in self.humans:
             pool = list((schema.get("properties", {}).get("target") or {}).get("enum") or [])
             ans = await self._ask_human(p, kind, title, instruction, pool)
             self._check_stop()          # 停止是在这里生效的
@@ -259,9 +279,9 @@ class Game:
                                      latency_ms=0, model="你", round=self.round, phase=self.phase))
                 return parsed
             self._emit("system", f"{p.name} 超时未操作，本回合交给模型代打。",
-                       audience=[p.seat] if self.human else "all")
+                       audience=[p.seat] if self.humans else "all")
 
-        self._push({"type": "thinking", "seat": p.seat, "title": title, "state": self.state()})
+        self._push({"type": "thinking", "seat": p.seat, "title": title})
         raw, parsed, ms, model = await self.llm.complete(
             p.system_prompt, p.messages, schema, kind, self._mock_ctx(p, **mock_extra)
         )
@@ -289,9 +309,9 @@ class Game:
         return v if v in pool else rng.choice(pool)
 
     # ---------- 对局主流程 ----------
-    def state(self) -> dict[str, Any]:
+    def state(self, viewer: int | None = None) -> dict[str, Any]:
         reveal = self.status in ("finished", "stopped")
-        show_roles = reveal or self.human is None      # 单人模式没结束前只能看到自己的身份
+        show_roles = reveal or not self.humans        # 有人坐在局里时，没结束前只能看到自己的身份
         return {
             "gid": self.gid,
             "status": self.status,
@@ -309,9 +329,11 @@ class Game:
             "sys_calls": sum(1 for c in self.calls if c.seat is None),
             "elapsed": (self.finished_at or time.time()) - self.started_at,
             "mode": self.mode,
-            "human": self.human,
-            "pending": self.pending,
-            "players": [p.public(reveal=show_roles or p.seat == self.human)
+            "human": viewer,
+            "humans": sorted(self.humans),
+            "names": {str(k): v for k, v in self.names.items()},
+            "pending": self.pending.get(viewer) if viewer else None,
+            "players": [p.public(reveal=show_roles or p.seat == viewer)
                         for p in self.players],
         }
 
@@ -336,7 +358,7 @@ class Game:
             self._emit("system", "对局被手动停止。")
         finally:
             self.finished_at = time.time()
-            self._push({"type": "state", "state": self.state()})
+            self._push({"type": "state"})
             self.save()
 
     # ---------- 夜晚 ----------
@@ -517,17 +539,17 @@ class Game:
         return True
 
     # ---------- 存档 ----------
-    def to_json(self, filtered: bool = False) -> dict[str, Any]:
-        """filtered=True 给前端用：单人模式下裁掉你看不到的事件和别人的上下文。
-        存档始终存完整的上帝视角，复盘时才看得到狼队夜里聊了什么。"""
+    def to_json(self, viewer: int | None = None) -> dict[str, Any]:
+        """给前端用：坐在局里的人只拿得到自己视野内的事件和自己的上下文。
+        存档始终存完整的上帝视角（viewer=None），复盘时才看得到狼队夜里聊了什么。"""
         events = self.events
         calls = self.calls
-        if filtered and self.human is not None:
-            events = [e for e in events if self._visible(e)]
-            calls = [c for c in calls if self._call_visible(c)]
+        if viewer is not None:
+            events = [e for e in events if self._visible_raw(e, viewer)]
+            calls = [c for c in calls if self._call_visible_raw(c, viewer)]
         return {
             "gid": self.gid,
-            "state": self.state(),
+            "state": self.state(viewer),
             "events": [e.to_json() for e in events],
             "calls": [c.to_json() for c in calls],
         }

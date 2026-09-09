@@ -67,6 +67,13 @@ LLM transport 从 `pitchasso/llm_api` 移植过来：OpenAI 兼容的 `/v1/chat/
   按钮只列引擎认可的合法目标（不能连守同一人、狼不能刀队友、投票不能投自己）。
   300 秒不操作就交给模型代打，不会把整局挂死。
 
+- **多人模式** —— 2~6 个人一起玩，剩下的座位交给模型。房主建房拿到一个 5 位数字码
+  （也可以直接把 `https://uhwoo.com/#join-12345` 这样的邀请链接发出去），其他人输码加入，
+  房主点开始。每个人一个 token，token 决定他坐哪个位置；SSE 推送和作答校验都按这个座位
+  裁视野，所以同一局里每个人看到的事件流是不一样的 —— 狼能看到队友的商议，平民什么都看不到。
+  谁的回合就弹谁的作答面板，投票这种同时进行的步骤大家可以一起答。
+  掉线不影响别人：300 秒不操作，那个位置这一步交给模型代打。
+
 裁剪是在服务端做的（`Game._visible` / `_call_visible` / `to_json(filtered=True)`），
 不是前端藏起来 —— 看不到的信息根本不会推到浏览器。存档仍然存完整的上帝视角，复盘时才看得到全部。
 
@@ -111,7 +118,9 @@ CLOUDFLARED_TUNNEL_UHWOO_TOKEN=eyJ...
 
 ```
 backend/
-  main.py      FastAPI：/api/start /api/stop /api/answer /api/stream(SSE) /api/snapshot /api/history
+  main.py      FastAPI：单人 /api/start /api/answer /api/stream(SSE)；
+               多人 /api/room /api/room/{code}/{join,start,answer,stream,stop,leave}
+  room.py      房间：5 位码 → 一局，token → 座位，空位交给模型
   game.py      对局引擎：夜晚 → 白天 → 投票 → 胜负，逐条广播事件；单人模式在这里等你回答
   model.py     Role / Player / Event(audience) / LLMCall
   prompts.py   常驻的规则与身份 + 每一步的指令和 JSON schema

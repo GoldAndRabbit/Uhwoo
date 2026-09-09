@@ -11,6 +11,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import room as rooms
 from . import tts
 from .game import GAMES_DIR, Game
 from .model import Role
@@ -79,7 +80,26 @@ async def start(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     _game = Game(gid, model=model, tts=bool(body.get("tts")), mode=mode,
                  human_seat=body.get("seat"), human_role=role, clone=body.get("clone"))
     _task = asyncio.create_task(_game.run())
-    return {"gid": gid, "state": _game.state()}
+    return {"gid": gid, "state": _game.state(_game.single_viewer())}
+
+
+def _answer_payload(q: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+    """把前端提交的内容按当前这一步的类型校验成引擎认的格式。"""
+    if q["field"] == "target":
+        try:
+            payload: dict[str, Any] = {"target": int(body.get("target"))}
+        except (TypeError, ValueError):
+            raise HTTPException(400, "target 要是座位号") from None
+        options = q.get("options") or []
+        if options and payload["target"] not in options:
+            raise HTTPException(400, f"只能选 {options}")
+        if q["kind"] == "wolf":                  # 只有狼队夜里商议要给队友一句话
+            payload["reason"] = str(body.get("reason", "")).strip()[:200]
+        return payload
+    text = str(body.get("speech", "")).strip()
+    if not text:
+        raise HTTPException(400, "发言不能为空")
+    return {"speech": text[:500]}
 
 
 @app.post("/api/answer")
@@ -87,25 +107,27 @@ async def answer(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
     """单人模式下把你的选择/发言交上去。"""
     if not _game or _game.status != "running":
         raise HTTPException(409, "没有进行中的对局")
-    if not _game.pending:
+    seat = _game.single_viewer()
+    q = _game.pending.get(seat) if seat else None
+    if not q:
         raise HTTPException(409, "现在没轮到你")
-    field = _game.pending["field"]
+    field = q["field"]
     if field == "target":
         try:
             payload: dict[str, Any] = {"target": int(body.get("target"))}
         except (TypeError, ValueError):
             raise HTTPException(400, "target 要是座位号") from None
-        options = _game.pending.get("options") or []
+        options = q.get("options") or []
         if options and payload["target"] not in options:
             raise HTTPException(400, f"只能选 {options}")
-        if _game.pending["kind"] == "wolf":       # 只有狼队夜里商议要给队友一句话
+        if q["kind"] == "wolf":       # 只有狼队夜里商议要给队友一句话
             payload["reason"] = str(body.get("reason", "")).strip()[:200]
     else:
         text = str(body.get("speech", "")).strip()
         if not text:
             raise HTTPException(400, "发言不能为空")
         payload = {"speech": text[:500]}
-    if not _game.answer(payload):
+    if not _game.answer(seat, payload):
         raise HTTPException(409, "这一步已经过去了")
     return {"ok": True}
 
@@ -115,14 +137,14 @@ async def stop() -> dict[str, Any]:
     if not _game:
         raise HTTPException(404, "还没有对局")
     _game.stop()
-    return {"ok": True, "state": _game.state()}
+    return {"ok": True, "state": _game.state(_game.single_viewer())}
 
 
 @app.get("/api/snapshot")
 async def snapshot() -> dict[str, Any]:
     if not _game:
         return {"empty": True}
-    return _game.to_json(filtered=True)
+    return _game.to_json(viewer=_game.single_viewer())
 
 
 @app.get("/api/history")
@@ -168,6 +190,121 @@ async def speak(body: dict[str, Any] = Body(...)) -> Response:
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
+# ---------------- 多人房间 ----------------
+
+def _room_or_404(code: str) -> rooms.Room:
+    r = rooms.get(code)
+    if not r:
+        raise HTTPException(404, "房间不存在或已过期")
+    return r
+
+
+@app.post("/api/room")
+async def room_create(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    r, me = rooms.create(str(body.get("name", "")))
+    return {"code": r.code, "token": me.token, "room": r.public(me.token)}
+
+
+@app.post("/api/room/{code}/join")
+async def room_join(code: str, body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    r = _room_or_404(code)
+    try:
+        me = r.join(str(body.get("name", "")))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    return {"code": r.code, "token": me.token, "room": r.public(me.token)}
+
+
+@app.get("/api/room/{code}")
+async def room_info(code: str, token: str = "") -> dict[str, Any]:
+    r = _room_or_404(code)
+    info = r.public(token)
+    if r.game:
+        info["game"] = r.game.state(r.seat_of(token))
+    return info
+
+
+@app.post("/api/room/{code}/leave")
+async def room_leave(code: str, body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    r = _room_or_404(code)
+    r.leave(str(body.get("token", "")))
+    return {"ok": True}
+
+
+@app.post("/api/room/{code}/start")
+async def room_start(code: str, body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    r = _room_or_404(code)
+    me = r.member(str(body.get("token", "")))
+    if not me or not me.host:
+        raise HTTPException(403, "只有房主能开局")
+    cfg = load_config()
+    model = body.get("model") or cfg.model
+    if model not in cfg.models:
+        raise HTTPException(400, f"未知模型 {model}")
+    try:
+        game = r.start({"model": model, "tts": body.get("tts"), "clone": body.get("clone")})
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    r.task = asyncio.create_task(game.run())
+    return {"ok": True, "room": r.public(me.token), "state": game.state(me.seat)}
+
+
+@app.post("/api/room/{code}/stop")
+async def room_stop(code: str, body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    r = _room_or_404(code)
+    me = r.member(str(body.get("token", "")))
+    if not me or not me.host:
+        raise HTTPException(403, "只有房主能停止")
+    if r.game:
+        r.game.stop()
+    return {"ok": True}
+
+
+@app.post("/api/room/{code}/answer")
+async def room_answer(code: str, body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    r = _room_or_404(code)
+    seat = r.seat_of(str(body.get("token", "")))
+    if not r.game or r.game.status != "running" or not seat:
+        raise HTTPException(409, "没有进行中的对局")
+    q = r.game.pending.get(seat)
+    if not q:
+        raise HTTPException(409, "现在没轮到你")
+    payload = _answer_payload(q, body)
+    if not r.game.answer(seat, payload):
+        raise HTTPException(409, "这一步已经过去了")
+    return {"ok": True}
+
+
+@app.get("/api/room/{code}/stream")
+async def room_stream(code: str, token: str = "") -> StreamingResponse:
+    r = _room_or_404(code)
+    seat = r.seat_of(token)
+
+    async def gen():
+        game = r.game
+        if not game:
+            yield "data: " + json.dumps({"type": "idle"}) + "\n\n"
+            return
+        yield "data: " + json.dumps({"type": "snapshot", "data": game.to_json(viewer=seat)},
+                                    ensure_ascii=False) + "\n\n"
+        q = game.subscribe(seat)
+        try:
+            while True:
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+                    continue
+                yield "data: " + json.dumps(msg, ensure_ascii=False) + "\n\n"
+                if msg.get("type") == "state" and msg["state"]["status"] in ("finished", "stopped"):
+                    break
+        finally:
+            game.unsubscribe(q)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.get("/api/stream")
 async def stream() -> StreamingResponse:
     async def gen():
@@ -176,9 +313,10 @@ async def stream() -> StreamingResponse:
             return
         game = _game
         # 先补发已经发生的一切，保证刷新页面不丢历史
-        yield "data: " + json.dumps({"type": "snapshot", "data": game.to_json(filtered=True)},
+        viewer = game.single_viewer()
+        yield "data: " + json.dumps({"type": "snapshot", "data": game.to_json(viewer=viewer)},
                                     ensure_ascii=False) + "\n\n"
-        q = game.subscribe()
+        q = game.subscribe(viewer)
         try:
             while True:
                 try:

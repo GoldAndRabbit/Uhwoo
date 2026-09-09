@@ -205,7 +205,7 @@ function renderAll() {
 
 function connect() {
   if (S.es) S.es.close();
-  S.es = new EventSource("/api/stream");
+  S.es = new EventSource(api.stream());
   S.es.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === "idle") return;
@@ -231,6 +231,73 @@ function connect() {
     if (["finished", "stopped"].includes(S.state?.status)) { loadHistory(); renderAll(); }
   };
   S.es.onerror = () => { /* 浏览器会自动重连 */ };
+}
+
+/* ---------------- 多人房间 ---------------- */
+// 进了房间之后，所有请求都走 /api/room/<code>/*，并带上自己的 token；
+// 服务端按 token 对应的座位裁视野，所以每个人看到的事件流是不一样的
+const R = { code: null, token: null, host: false, poll: null };
+
+const api = {
+  stream: () => (R.code ? `/api/room/${R.code}/stream?token=${R.token}` : "/api/stream"),
+  answer: () => (R.code ? `/api/room/${R.code}/answer` : "/api/answer"),
+  stop: () => (R.code ? `/api/room/${R.code}/stop` : "/api/stop"),
+};
+
+const post = async (url, body) => {
+  const r = await fetch(url, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || r.status);
+  return d;
+};
+
+function saveRoom() {
+  try { localStorage.setItem("ww_room", JSON.stringify({ code: R.code, token: R.token })); }
+  catch (_) {}
+}
+
+function renderRoom(info) {
+  R.host = !!info.is_host;
+  $("roomBox").hidden = false;
+  $("roomCode").textContent = info.code;
+  $("roomHint").textContent = `把房间号或这个链接发给朋友：${location.origin}/#join-${info.code}`;
+  $("roomMembers").innerHTML = info.members.map((m) => {
+    const me = info.you && m.name === info.you.name && m.seat === info.you.seat;
+    return `<span class="${m.host ? "host" : ""}${me ? " me" : ""}">${esc(m.name)}${
+      m.seat ? " · " + m.seat + "号" : ""}</span>`;
+  }).join("") + `<span>${info.count}/${info.max} 人 · 空位交给模型</span>`;
+  $("btnRoomStart").hidden = !info.is_host || info.status === "running";
+  $("btnRoomStart").textContent = info.status === "running" ? "进行中" : "开始（房主）";
+}
+
+async function pollRoom() {
+  if (!R.code) return;
+  try {
+    const info = await (await fetch(`/api/room/${R.code}?token=${R.token}`)).json();
+    if (info.detail) { leaveRoom(); return; }
+    renderRoom(info);
+    if (info.status === "running" && !S.es) connect();   // 房主开局了，跟着进去
+  } catch (_) {}
+}
+
+function leaveRoom() {
+  if (R.code) post(`/api/room/${R.code}/leave`, { token: R.token }).catch(() => {});
+  R.code = R.token = null; R.host = false;
+  clearInterval(R.poll); R.poll = null;
+  try { localStorage.removeItem("ww_room"); } catch (_) {}
+  $("roomBox").hidden = true;
+  if (S.es) { S.es.close(); S.es = null; }
+}
+
+function enterRoom(d) {
+  R.code = d.code; R.token = d.token;
+  saveRoom();
+  renderRoom(d.room);
+  clearInterval(R.poll);
+  R.poll = setInterval(pollRoom, 2000);
 }
 
 /* ---------------- 事件流顶栏：身份 + 停止/重开 ---------------- */
@@ -304,12 +371,10 @@ function renderAsk(p) {
 async function submitAnswer(payload) {
   const btn = $("askSend");
   if (btn) btn.disabled = true;
-  const r = await fetch("/api/answer", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!r.ok) {
-    alert((await r.json()).detail);
+  try {
+    await post(api.answer(), { ...payload, token: R.token });
+  } catch (e) {
+    alert(e.message);
     if (btn) btn.disabled = false;
     return;
   }
@@ -582,14 +647,49 @@ async function stopGame() {
   // 否则它们照样排进播放队列，人已经点了停止还在念
   TTS.on = false;
   stopSpeaking();
-  await fetch("/api/stop", { method: "POST" });
+  await post(api.stop(), { token: R.token }).catch(() => {});
 }
 
-function syncModeUI() {                       // 身份只在单人模式下用得上
-  $("roleField").hidden = $("modeSel").value !== "play";
+function syncModeUI() {
+  const m = $("modeSel").value;
+  $("roleField").hidden = m !== "play";           // 身份只在单人模式下用得上
+  $("lobby").hidden = m !== "multi";              // 房间面板只在多人模式出现
+  $("btnStart").hidden = m === "multi";           // 多人局由房主在房间里开
+  $("btnStop").hidden = m === "multi";
+  if (m !== "multi" && R.code) leaveRoom();
 }
 $("modeSel").addEventListener("change", syncModeUI);
 syncModeUI();
+
+$("btnCreate").addEventListener("click", async () => {
+  unlockAudio();
+  try { enterRoom(await post("/api/room", { name: $("nickName").value })); }
+  catch (e) { alert(e.message); }
+});
+
+$("btnJoin").addEventListener("click", async () => {
+  unlockAudio();
+  const code = $("joinCode").value.trim();
+  if (!/^\d{5}$/.test(code)) { alert("房间号是 5 位数字"); return; }
+  try { enterRoom(await post(`/api/room/${code}/join`, { name: $("nickName").value })); }
+  catch (e) { alert(e.message); }
+});
+
+$("btnLeave").addEventListener("click", leaveRoom);
+
+$("btnRoomStart").addEventListener("click", async () => {
+  unlockAudio();
+  TTS.on = TTS.ok && $("ttsOn").checked;
+  try {
+    await post(`/api/room/${R.code}/start`, {
+      token: R.token, model: $("modelSel").value, tts: TTS.on, clone: $("cloneOn").checked,
+    });
+    S.events = []; S.calls = []; S.filter = null;
+    renderAsk(null);
+    connect();
+    if (isMobile()) setTab("log");
+  } catch (e) { alert(e.message); }
+});
 
 $("btnStart").addEventListener("click", startGame);
 $("btnStop").addEventListener("click", stopGame);
@@ -655,6 +755,27 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
     renderLog(); renderCalls();
   }
   await loadHistory();
+  const invite = (location.hash.match(/^#join-(\d{5})$/) || [])[1];
+  if (invite) {                                   // 朋友点邀请链接进来的
+    $("modeSel").value = "multi";
+    $("joinCode").value = invite;
+    history.replaceState(null, "", location.pathname);
+  }
+  try {
+    const saved = invite ? null : JSON.parse(localStorage.getItem("ww_room") || "null");
+    if (saved && saved.code) {
+      const info = await (await fetch(`/api/room/${saved.code}?token=${saved.token}`)).json();
+      if (info.code && info.you) {                 // 房间还在，接着玩
+        $("modeSel").value = "multi";
+        R.code = saved.code; R.token = saved.token;
+        renderRoom(info);
+        R.poll = setInterval(pollRoom, 2000);
+        if (info.status === "running") connect();
+      } else { localStorage.removeItem("ww_room"); }
+    }
+  } catch (_) {}
+  syncModeUI();
+
   const hash = location.hash.replace("#", "");
   setTab(["side", "ctx", "log"].includes(hash) ? hash
          : S.state && S.state.status === "running" ? "log" : "side");
