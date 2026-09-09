@@ -295,6 +295,7 @@ function renderAsk(p) {
     if (left <= 0) clearInterval(askTimer);
   }, 200);
   if (isMobile()) setTab("log");
+  setTimeout(() => box.scrollIntoView({ block: "end", behavior: "smooth" }), 60);
 }
 
 async function submitAnswer(payload) {

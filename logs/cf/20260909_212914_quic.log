@@ -51,3 +51,14 @@
 2026-09-09T14:04:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
 2026-09-09T14:05:21Z ERR  error="unexpected EOF" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
 2026-09-09T14:05:21Z ERR Request failed error="unexpected EOF" connIndex=1 dest=http://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T14:08:30Z ERR  error="stream 545 canceled by remote with error code 0" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T14:08:30Z ERR Request failed error="stream 545 canceled by remote with error code 0" connIndex=1 dest=http://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T14:09:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
+2026-09-09T14:09:15Z ERR  error="stream 577 canceled by remote with error code 0" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T14:09:15Z ERR Request failed error="stream 577 canceled by remote with error code 0" connIndex=1 dest=http://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T14:09:18Z ERR  error="stream 57 canceled by remote with error code 0" connIndex=0 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T14:09:18Z ERR Request failed error="stream 57 canceled by remote with error code 0" connIndex=0 dest=http://uhwoo.com/api/stream event=0 ip=198.41.192.77 type=http
+2026-09-09T14:09:46Z ERR  error="stream 613 canceled by remote with error code 0" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T14:09:46Z ERR Request failed error="stream 613 canceled by remote with error code 0" connIndex=1 dest=http://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T14:10:01Z ERR  error="unexpected EOF" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T14:10:01Z ERR Request failed error="unexpected EOF" connIndex=1 dest=http://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http

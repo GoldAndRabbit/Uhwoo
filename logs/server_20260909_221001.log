@@ -1,0 +1,30 @@
+INFO:     Started server process [56166]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8130 (Press CTRL+C to quit)
+INFO:     127.0.0.1:57243 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/stop HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57250 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /static/style.css?v=1788963000 HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET / HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /static/app.js?v=1788963000 HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /static/style.css?v=1788963000 HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /api/stream HTTP/1.1" 200 OK

@@ -21,6 +21,8 @@ button{font:inherit;cursor:pointer;}
 .tab-note{display:flex;align-items:center;padding:0 14px;font-size:11px;color:var(--dim);}
 
 .app{display:grid;grid-template-columns:268px 400px 1fr;height:calc(100vh - 34px);}
+/* iOS Safari 的 100vh 含地址栏高度，会把内容顶到可视区外面，用 dvh 修正 */
+@supports (height: 100dvh){ .app{height:calc(100dvh - 34px);} }
 .col{overflow-y:auto;min-width:0;}
 .col::-webkit-scrollbar{width:8px;} .col::-webkit-scrollbar-thumb{background:#d8d4cc;border-radius:4px;}
 
@@ -162,7 +164,9 @@ details[open] summary::before{content:"▾ ";}
 
   /* 三栏改成一次只显示一栏，由 body[data-tab] 决定显示哪一栏 */
   .app{display:block;height:auto;}
-  .col{display:none;height:calc(100vh - 32px - 54px);overflow-y:auto;border-right:none;}
+  .col{display:none;height:calc(100vh - 32px - 54px);overflow-y:auto;border-right:none;
+       -webkit-overflow-scrolling:touch;}
+  .ask{padding-bottom:14px;}
   body[data-tab="side"] .sidebar{display:block;}
   body[data-tab="ctx"]  .center {display:block;}
   body[data-tab="log"]  .right  {display:block;}
@@ -198,4 +202,10 @@ details[open] summary::before{content:"▾ ";}
   .mobnav button.active{color:#c0392b;font-weight:600;box-shadow:inset 0 -2px 0 #c0392b;}
   .mobnav .n{background:#efece6;border-radius:8px;padding:0 6px;font-size:11px;color:#6b6558;}
   .mobnav button.active .n{background:#fbe4e4;color:#a52a2a;}
+}
+
+@supports (height: 100dvh){
+  @media (max-width: 860px){
+    .col{height:calc(100dvh - 32px - 54px);}
+  }
 }
