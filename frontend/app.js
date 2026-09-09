@@ -44,12 +44,14 @@ function renderPlayers() {
       S.filter = S.filter === seat ? null : seat;
       renderPlayers();
       renderCalls();
+      if (isMobile() && S.filter !== null) setTab("ctx");
     })
   );
   const aliveN = st.players.filter((p) => p.alive).length;
   $("aliveCount").textContent = `${aliveN}/${st.players.length} 存活`;
   $("callCount").textContent = st.calls;
   $("tabBadge").textContent = st.calls;
+  $("navCalls").textContent = st.calls;
 }
 
 async function loadHistory() {
@@ -120,7 +122,7 @@ function cardHTML(c) {
 /* ---------------- 右栏 ---------------- */
 function renderLog() {
   $("log").innerHTML = S.events.map(rowHTML).join("") ||
-    `<div class="empty">点左边「开一局」，这里会逐条出现夜里的行动和白天的发言。</div>`;
+    `<div class="empty">点「开一局」，这里会逐条出现夜里的行动和白天的发言。</div>`;
 }
 
 function rowHTML(ev) {
@@ -200,7 +202,8 @@ function connect() {
       if (msg.data.kind === "speech")
         speak(msg.data.seat, msg.data.text.replace(/^[^：]*：/, ""));
       renderLog();
-      $("log").parentElement.scrollTop = $("log").parentElement.scrollHeight;
+      const box = $("log").parentElement;
+      box.scrollTop = box.scrollHeight;
     } else if (msg.type === "call") {
       S.calls.push(msg.data);
       renderCalls();
@@ -212,6 +215,22 @@ function connect() {
   };
   S.es.onerror = () => { /* 浏览器会自动重连 */ };
 }
+
+/* ---------------- 移动端页签 ---------------- */
+const isMobile = () => window.matchMedia("(max-width: 860px)").matches;
+
+function setTab(name) {
+  document.body.dataset.tab = name;
+  if (isMobile()) history.replaceState(null, "", "#" + name);   // 刷新后停在同一页签
+  document.querySelectorAll(".mobnav button")
+    .forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  const col = { side: ".sidebar", ctx: ".center", log: ".right" }[name];
+  const el = document.querySelector(col);
+  if (el) el.scrollTop = name === "log" ? el.scrollHeight : 0;
+}
+
+document.querySelectorAll(".mobnav button")
+  .forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
 /* ---------------- 朗读 ---------------- */
 const TTS = { on: false, ok: false, q: [], playing: false, audio: new Audio(), urls: new Map(),
@@ -307,6 +326,7 @@ $("btnStart").addEventListener("click", async () => {
   S.state = d.state; S.events = []; S.calls = []; S.filter = null;
   renderAll();
   connect();
+  if (isMobile()) setTab("log");            // 手机上开局后直接看事件流
 });
 
 $("btnStop").addEventListener("click", async () => {
@@ -360,5 +380,8 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
     renderLog(); renderCalls();
   }
   await loadHistory();
+  const hash = location.hash.replace("#", "");
+  setTab(["side", "ctx", "log"].includes(hash) ? hash
+         : S.state && S.state.status === "running" ? "log" : "side");
   S.timer = setInterval(tickRun, 100);
 })();

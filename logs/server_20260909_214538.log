@@ -1,0 +1,54 @@
+INFO:     Started server process [54478]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8130 (Press CTRL+C to quit)
+INFO:     127.0.0.1:52934 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52962 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52963 - "GET /static/app.js?v=1788961537 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52962 - "GET /static/style.css?v=1788961304 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52962 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52962 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52962 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52963 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52982 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52999 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53000 - "GET /static/app.js?v=1788961537 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52999 - "GET /static/style.css?v=1788961304 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52999 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52999 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52999 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53000 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53013 - "POST /api/start HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53014 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53039 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53090 - "GET /api/snapshot HTTP/1.1" 200 OK
+chat 失败 (RemoteProtocolError)，0.6s 后第 2/4 次重试
+INFO:     127.0.0.1:53095 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53115 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53121 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53134 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53163 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53164 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53202 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53203 - "GET /static/app.js?v=1788961561 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53202 - "GET /static/style.css?v=1788961304 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53202 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53202 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53203 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53203 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53231 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53231 - "GET /static/style.css?v=1788961304 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53232 - "GET /static/app.js?v=1788961561 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53231 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53231 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53232 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53240 - "GET /api/history HTTP/1.1" 200 OK

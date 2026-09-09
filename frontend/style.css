@@ -118,3 +118,52 @@ details[open] summary::before{content:"▾ ";}
 @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
 .runbar.done .dots{display:none;}
 .empty{color:#b3ada2;font-size:12px;padding:24px 0;}
+
+/* ---------- 移动端：单栏 + 底部三个页签 ---------- */
+.mobnav{display:none;}
+
+@media (max-width: 860px){
+  body{font-size:14px;}
+  .tabbar{height:32px;}
+  .tab{padding:0 10px;font-size:11px;}
+  .tab-note{display:none;}
+
+  /* 三栏改成一次只显示一栏，由 body[data-tab] 决定显示哪一栏 */
+  .app{display:block;height:auto;}
+  .col{display:none;height:calc(100vh - 32px - 54px);overflow-y:auto;border-right:none;}
+  body[data-tab="side"] .sidebar{display:block;}
+  body[data-tab="ctx"]  .center {display:block;}
+  body[data-tab="log"]  .right  {display:block;}
+
+  .sidebar{padding:12px 12px 20px;}
+  .center{padding:0 10px 20px;}
+  .right{padding:0 12px 20px;}
+  .col-head{padding:10px 2px 8px;}
+
+  /* 手机上气泡要占满宽度，角色标签换行到上一行更好读 */
+  .row{flex-wrap:wrap;gap:6px;}
+  .bubble{max-width:100%;}
+  .badge,.only{font-size:11px;}
+  .phase h2{font-size:16px;}
+  .phase .note{display:none;}
+  .blk{max-height:150px;font-size:11px;}
+  .prow{padding:10px;}
+  .btn{padding:11px 10px;}          /* 手指点得中 */
+  .field select{padding:10px 8px;}
+  .check{padding:4px 0;}
+
+  .runbar{bottom:0;padding:8px 0 10px;}
+
+  .mobnav{
+    display:flex;position:fixed;left:0;right:0;bottom:0;height:54px;z-index:20;
+    background:var(--panel);border-top:1px solid var(--line);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .mobnav button{
+    flex:1;border:none;background:none;color:var(--dim);font-size:13px;
+    display:flex;align-items:center;justify-content:center;gap:5px;
+  }
+  .mobnav button.active{color:#c0392b;font-weight:600;box-shadow:inset 0 -2px 0 #c0392b;}
+  .mobnav .n{background:#efece6;border-radius:8px;padding:0 6px;font-size:11px;color:#6b6558;}
+  .mobnav button.active .n{background:#fbe4e4;color:#a52a2a;}
+}
