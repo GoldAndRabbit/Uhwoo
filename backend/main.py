@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import tts
-from .game import DATA_DIR, Game
+from .game import GAMES_DIR, Game
 from .llm import has_credentials
 from .llm_api import load_config
 
@@ -112,9 +112,9 @@ async def snapshot() -> dict[str, Any]:
 
 @app.get("/api/history")
 async def history() -> list[dict[str, Any]]:
-    DATA_DIR.mkdir(exist_ok=True)
+    GAMES_DIR.mkdir(parents=True, exist_ok=True)
     out = []
-    for f in sorted(DATA_DIR.glob("*.json"), reverse=True):
+    for f in sorted(GAMES_DIR.glob("*.json"), reverse=True):
         try:
             d = json.loads(f.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
@@ -128,7 +128,7 @@ async def history() -> list[dict[str, Any]]:
 
 @app.get("/api/history/{gid}")
 async def history_one(gid: str) -> dict[str, Any]:
-    f = DATA_DIR / f"{gid}.json"
+    f = GAMES_DIR / f"{gid}.json"
     if not f.exists():
         raise HTTPException(404, "没有这局记录")
     return json.loads(f.read_text(encoding="utf-8"))

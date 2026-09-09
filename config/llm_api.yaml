@@ -36,6 +36,7 @@ tts:
   voice: longanhuan_v3.6
   # websocket_url: wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference
   seats:
+    0: {pitch_rate: 0.90, speech_rate: 0.92}   # 法官：只报天数、死讯、票型
     1: {pitch_rate: 1.00, speech_rate: 1.05}
     2: {pitch_rate: 0.88, speech_rate: 1.00}
     3: {pitch_rate: 1.12, speech_rate: 1.10}

@@ -55,6 +55,7 @@ button{font:inherit;cursor:pointer;}
 .r-预言家{background:var(--seer-bg);color:var(--seer-fg);}
 .r-守卫{background:var(--guard-bg);color:var(--guard-fg);}
 .r-平民{background:var(--vill-bg);color:var(--vill-fg);}
+.judge{background:#e8e4f0;color:#4b3f6b;}
 .history .hrow{display:flex;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;
                margin-bottom:6px;background:#fcfbf9;cursor:pointer;font-size:12px;}
 .history .hrow:hover{background:#f4f2ee;}

@@ -122,5 +122,6 @@ backend/
 deploy/        run_server.sh / run_cf.sh / kill_cf.sh / check_cf.sh / setup_tunnel.sh
 frontend/      index.html / style.css / app.js（原生三栏 UI，SSE 增量渲染）
 config/        llm_api.yaml
-data/          每局存档 JSON，左栏「历史对话」可回放
+logs/games/    每局存档 JSON（完整上帝视角），左栏「历史对话」可回放
+data/tts/      语音合成缓存（按文本 sha1）
 ```

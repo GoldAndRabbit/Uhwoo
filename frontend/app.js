@@ -6,6 +6,7 @@ const S = {
   events: [],
   calls: [],
   filter: null,        // null=全部, 数字=座位, "sys"=系统
+  pending: null,       // 正在等你回答的那个问题
   es: null,
   timer: null,
   readonly: false,
@@ -85,7 +86,6 @@ async function openHistory(gid) {
   S.readonly = true;
   S.state = d.state; S.events = d.events; S.calls = d.calls; S.filter = null;
   renderAll();
-  setRun(`回放 werewolf ${gid} · ${d.state.winner || "中断"} · ${d.state.calls} 次调用`, true);
 }
 
 /* ---------------- 中栏 ---------------- */
@@ -157,7 +157,8 @@ function rowHTML(ev) {
   if (ev.kind === "vote")
     return `<div class="row">${onlyTag}<div class="bubble plain vote">${esc(ev.text)}</div></div>`;
   if (ev.kind === "result")
-    return `<div class="row"><div class="bubble result">${esc(ev.text)}</div></div>`;
+    return `<div class="row"><span class="badge judge">法官</span>
+      <div class="bubble result">${esc(ev.text)}</div></div>`;
   if (ev.kind === "night_action") {
     const role = ev.seat ? roleOf(ev.seat) : "";
     const badge = ev.seat
@@ -168,23 +169,7 @@ function rowHTML(ev) {
   return `<div class="row">${onlyTag}<div class="bubble plain">${esc(ev.text)}</div></div>`;
 }
 
-function setRun(text, done) {
-  $("runbar").hidden = !text;            // 没在跑就整条不出现
-  $("runText").textContent = text || "";
-  $("runbar").classList.toggle("done", !!done);
-}
 
-function tickRun() {
-  const st = S.state;
-  if (!st) { setRun("", true); return; }
-  if (st.status === "running") {
-    setRun(`运行中… ${st.elapsed.toFixed(1)}s · ${st.calls} 次调用 · 第${st.round}${st.phase === "night" ? "夜" : "天"}`, false);
-    st.elapsed += 0.1;
-  } else if (st.status === "finished")
-    setRun(`本局结束：${st.winner}胜利 · ${st.elapsed.toFixed(1)}s · ${st.calls} 次调用`, true);
-  else if (st.status === "stopped")
-    setRun(`已停止 · ${st.elapsed.toFixed(1)}s · ${st.calls} 次调用`, true);
-}
 
 /* ---------------- 事件流 ---------------- */
 function renderAll() {
@@ -211,21 +196,15 @@ function connect() {
       renderAsk(S.state.pending);        // 刷新页面时如果正轮到你，把问题接回来
       renderAll(); return;
     }
-    if (msg.state) { S.state = msg.state; renderMeBar(); }
+    if (msg.state && msg.type !== "event") { S.state = msg.state; renderMeBar(); }
     if (msg.type === "event") {
-      S.events.push(msg.data);
-      if (msg.data.kind === "speech")
-        speak(msg.data.seat, msg.data.text.replace(/^[^：]*：/, ""));
-      renderLog();
-      const box = $("log").parentElement;
-      box.scrollTop = box.scrollHeight;
+      present({ type: "event", ev: msg.data, state: msg.state });
     } else if (msg.type === "call") {
       S.calls.push(msg.data);
       renderCalls();
     } else if (msg.type === "prompt") {
-      renderAsk(msg.data);
-    } else if (msg.type === "thinking") {
-      setRun(`${msg.title} 思考中…`, false);
+      if (msg.data) present({ type: "prompt", p: msg.data });
+      else renderAsk(null);
     }
     renderPlayers();
     if (["finished", "stopped"].includes(S.state?.status)) { loadHistory(); renderAll(); }
@@ -256,6 +235,7 @@ let askTimer = null;
 
 function renderAsk(p) {
   const box = $("ask");
+  S.pending = p || null;
   if (!p) { box.hidden = true; clearInterval(askTimer); return; }
   box.hidden = false;
   const meRole = roleOf(p.seat);
@@ -272,10 +252,12 @@ function renderAsk(p) {
   } else {
     const seats = (p.options || []).map((s) =>
       `<button data-seat="${s}">${s}号</button>`).join("");
+    // 只有狼队夜里商议要给队友一句理由；投票和守护/查验都是闷着来的，不填理由
+    const reason = p.kind === "wolf"
+      ? `<input type="text" id="askReason" placeholder="给狼队友的一句话（可留空）">` : "";
     $("askBody").innerHTML = q +
-      `<div class="seats" id="askSeats">${seats}</div>
-       <input type="text" id="askReason" placeholder="理由（可留空）">
-       <button class="send" id="askSend" disabled>确定</button>`;
+      `<div class="seats" id="askSeats">${seats}</div>${reason}
+       <button class="send" id="askSend" disabled>${p.kind === "vote" ? "投票" : "确定"}</button>`;
     let chosen = null;
     $("askSeats").querySelectorAll("button").forEach((b) =>
       b.addEventListener("click", () => {
@@ -285,7 +267,7 @@ function renderAsk(p) {
         $("askSend").disabled = false;
       }));
     $("askSend").addEventListener("click", () =>
-      submitAnswer({ target: chosen, reason: $("askReason").value }));
+      submitAnswer({ target: chosen, reason: $("askReason")?.value || "" }));
   }
 
   clearInterval(askTimer);
@@ -329,11 +311,16 @@ function setTab(name) {
 document.querySelectorAll(".mobnav button")
   .forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
-/* ---------------- 朗读 ---------------- */
-const TTS = { on: false, ok: false, q: [], playing: false, audio: new Audio(), urls: new Map(),
+/* ---------------- 朗读 + 演出队列 ---------------- */
+// 开了朗读之后，事件不再一到就渲染 —— 渲染和播报走同一条流水线：
+// 念完这一条才放出下一条，包括「轮到你」的作答面板。不然语音还没读完
+// 下面的发言就全刷出来了，等于剧透。
+const TTS = { on: false, ok: false, audio: new Audio(), urls: new Map(),
               unlocked: false, blocked: false };
 TTS.audio.preload = "auto";
 TTS.audio.playsInline = true;
+
+const JUDGE = 0;                       // 法官（上帝）用 0 号音色，只报天数、死讯和票型
 
 // iOS / Safari 只认「用户手势里同步调用的 play()」。我们的音频要等 fetch 回来才播，
 // 那会儿手势早过期了，所以点按钮的当下先拿一段无声 wav 把这个 audio 元素解锁，
@@ -355,7 +342,7 @@ function unlockAudio() {
 }
 
 // 万一解锁没赶上（比如刷新页面接上正在跑的一局），下一次点页面任意处补一次
-document.addEventListener("pointerdown", () => { unlockAudio(); if (TTS.blocked) pump(); },
+document.addEventListener("pointerdown", () => { unlockAudio(); if (TTS.blocked) drain(); },
                           { capture: true });
 
 async function audioURL(seat, text) {
@@ -372,39 +359,79 @@ async function audioURL(seat, text) {
   return p;
 }
 
-function speak(seat, text) {
-  if (!TTS.on || !TTS.ok || !text) return;
-  TTS.q.push({ seat, text });
-  pump();
-}
-
-async function pump() {
-  if (TTS.playing || !TTS.q.length) return;
-  TTS.playing = true;
-  const { seat, text } = TTS.q.shift();
-  if (TTS.q.length) audioURL(TTS.q[0].seat, TTS.q[0].text).catch(() => {});  // 预取下一句
+async function playLine(seat, text) {
   try {
     TTS.audio.src = await audioURL(seat, text);
     await TTS.audio.play();
     TTS.blocked = false;
     await new Promise((res) => { TTS.audio.onended = res; TTS.audio.onerror = res; });
   } catch (e) {
-    if (e && e.name === "NotAllowedError") {       // 被自动播放策略拦了，等下一次点击再续
-      TTS.blocked = true;
-      TTS.q.unshift({ seat, text });
-      TTS.playing = false;
-      return;
-    }
+    if (e && e.name === "NotAllowedError") TTS.blocked = true;   // 自动播放被拦，等下一次点击
   }
-  TTS.playing = false;
-  pump();
+}
+
+// 这一条要不要念、用谁的声音念
+function narration(ev) {
+  if (ev.kind === "speech")
+    return { seat: ev.seat, text: ev.text.replace(/^[^：]*：/, "") };
+  if (ev.kind === "phase")
+    return { seat: JUDGE, text: ev.text.replace(/—/g, "").trim() };
+  if (ev.kind === "result")
+    return { seat: JUDGE, text: ev.text };
+  if (ev.kind === "system" && ev.text.startsWith("存活玩家"))
+    return { seat: JUDGE, text: ev.text };
+  if (ev.kind === "night_action" && isPlay())        // 游玩模式下这些是你自己的私密信息
+    return { seat: JUDGE, text: ev.text };
+  return null;
+}
+
+/* 演出队列：{type:"event"|"prompt", ...} */
+const Q = { items: [], busy: false };
+
+function present(item) {
+  if (!TTS.on || !TTS.ok) { apply(item); return; }   // 没开朗读就照旧即时渲染
+  Q.items.push(item);
+  drain();
+}
+
+function apply(item) {
+  if (item.type === "event") {
+    if (item.state) { S.state = item.state; renderMeBar(); renderPlayers(); }
+    S.events.push(item.ev);
+    renderLog();
+    const box = $("log").parentElement;
+    box.scrollTop = box.scrollHeight;
+  } else if (item.type === "prompt") {
+    renderAsk(item.p);
+  }
+}
+
+async function drain() {
+  if (Q.busy) return;
+  Q.busy = true;
+  while (Q.items.length) {
+    const it = Q.items.shift();
+    apply(it);
+    const line = it.type === "event" ? narration(it.ev) : null;
+    if (line && line.text) {
+      const next = Q.items.find((x) => x.type === "event" && narration(x.ev));
+      if (next) audioURL(narration(next.ev).seat, narration(next.ev).text).catch(() => {});
+      await playLine(line.seat, line.text);
+      if (TTS.blocked) { Q.items.unshift(it); break; }   // 被浏览器拦了，等用户点一下再续
+    } else {
+      await new Promise((r) => setTimeout(r, 220));      // 不念的条目也留一点节奏
+    }
+    if (!TTS.on) { Q.items.forEach(apply); Q.items.length = 0; }   // 中途关掉朗读就全放出来
+  }
+  Q.busy = false;
 }
 
 function stopSpeaking() {
-  TTS.q.length = 0;
+  Q.items.forEach(apply);              // 别把没渲染的事件吞掉
+  Q.items.length = 0;
   TTS.audio.pause();
   TTS.audio.currentTime = 0;
-  TTS.playing = false;
+  Q.busy = false;
 }
 
 /* ---------------- 交互 ---------------- */
@@ -462,7 +489,7 @@ $("log").addEventListener("click", (e) => {
   stopSpeaking();
   TTS.on = true;
   $("ttsOn").checked = true;
-  speak(Number(b.dataset.seat), b.dataset.text);
+  playLine(Number(b.dataset.seat), b.dataset.text);
 });
 
 $("btnNew").addEventListener("click", startGame);
@@ -497,5 +524,4 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
   const hash = location.hash.replace("#", "");
   setTab(["side", "ctx", "log"].includes(hash) ? hash
          : S.state && S.state.status === "running" ? "log" : "side");
-  S.timer = setInterval(tickRun, 100);
 })();

@@ -13,7 +13,7 @@ from . import tts as tts_mod
 from .llm import LLMClient
 from .model import SETUP, Event, LLMCall, Player, Role
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+GAMES_DIR = Path(__file__).resolve().parent.parent / "logs" / "games"   # 对局存档
 
 
 class GameStopped(Exception):
@@ -109,7 +109,7 @@ class Game:
         ev = Event(kind=kind, text=text, audience=audience, seat=seat,
                    round=self.round, phase=self.phase, meta={"stream": stream, **meta})
         self.events.append(ev)
-        if self.tts and kind == "speech":
+        if self.tts:
             self._warm_tts(ev)
         if self._visible(ev):
             self._push({"type": "event", "data": ev.to_json(), "state": self.state()})
@@ -117,13 +117,32 @@ class Game:
             self._push({"type": "state", "state": self.state()})
         return ev
 
+    JUDGE_VOICE = 0          # 法官（上帝）：只报天数、死讯和票型，用 0 号音色
+
+    def _narration(self, ev: Event) -> tuple[int | None, str] | None:
+        """这条事件要不要念、用谁的声音念 —— 和前端 narration() 保持一致。"""
+        if ev.kind == "speech":
+            return ev.seat, ev.text.split("：", 1)[-1]
+        if ev.kind == "phase":
+            return self.JUDGE_VOICE, ev.text.replace("—", "").strip()
+        if ev.kind == "result":
+            return self.JUDGE_VOICE, ev.text
+        if ev.kind == "system" and ev.text.startswith("存活玩家"):
+            return self.JUDGE_VOICE, ev.text
+        if ev.kind == "night_action" and self.human is not None:
+            return self.JUDGE_VOICE, ev.text
+        return None
+
     def _warm_tts(self, ev: Event) -> None:
-        """发言一出来就先去合成，等前端来取的时候基本已经在缓存里了。"""
-        text = ev.text.split("：", 1)[-1]
+        """事件一落地就先去合成，等前端来取的时候基本已经在缓存里了。"""
+        line = self._narration(ev)
+        if not line:
+            return
+        seat, text = line
 
         async def go() -> None:
             try:
-                await tts_mod.synthesize(text[:400], ev.seat)
+                await tts_mod.synthesize(text[:400], seat)
             except Exception:
                 pass
 
@@ -446,7 +465,8 @@ class Game:
         for seat in voters:
             t = votes[seat]
             self.suspicion[t] = self.suspicion.get(t, 0.0) + 1.0
-            self._emit("vote", f"{self.player(seat).name} → {t}号：{reasons[seat]}",
+            why = reasons[seat]
+            self._emit("vote", f"{self.player(seat).name} → {t}号" + (f"：{why}" if why else ""),
                        seat=seat, target=t)
 
         tally: dict[int, int] = {}
@@ -506,6 +526,6 @@ class Game:
         }
 
     def save(self) -> None:
-        DATA_DIR.mkdir(exist_ok=True)
-        (DATA_DIR / f"{self.gid}.json").write_text(
+        GAMES_DIR.mkdir(parents=True, exist_ok=True)
+        (GAMES_DIR / f"{self.gid}.json").write_text(
             json.dumps(self.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")

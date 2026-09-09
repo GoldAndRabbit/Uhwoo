@@ -23,6 +23,7 @@ CACHE_DIR = ROOT / "data" / "tts"
 
 # 只有 longanhuan_v3.6 一个音色可用，所以用音高/语速把 6 个座位区分开
 DEFAULT_SEAT_STYLES: dict[int, dict[str, float]] = {
+    0: {"pitch_rate": 0.90, "speech_rate": 0.92},      # 0 号 = 法官（上帝）：低沉、慢一点
     1: {"pitch_rate": 1.00, "speech_rate": 1.05},
     2: {"pitch_rate": 0.88, "speech_rate": 1.00},
     3: {"pitch_rate": 1.12, "speech_rate": 1.10},
