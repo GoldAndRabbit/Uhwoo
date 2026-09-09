@@ -23,7 +23,7 @@ const ROLE_IMG = { "守卫": "guard", "平民": "villager", "狼人": "wolf", "�
 const avatar = (role, cls = "ava") =>
   ROLE_IMG[role] ? `<img class="${cls}" src="/static/img/roles/${ROLE_IMG[role]}.png" alt="${role}">` : "";
 const audienceLabel = (a) =>
-  a === "all" ? null : "仅 " + a.map((s) => s + "号").join("/");
+  a === "all" ? null : "只有 " + a.map((s) => s + "号").join("、") + " 看得到";
 
 /* ---------------- 左栏 ---------------- */
 function renderPlayers() {
@@ -154,7 +154,8 @@ function playBtn(ev) {
 
 function rowHTML(ev) {
   const only = audienceLabel(ev.audience);
-  const onlyTag = only ? `<span class="only">${only}</span>` : "";
+  const onlyTag = only
+    ? `<span class="only" title="这条事件只进这些人的上下文，别人拿不到">${only}</span>` : "";
   if (ev.kind === "phase") {
     const day = ev.text.includes("天");
     return `<div class="phase"><h2>${esc(ev.text.replace(/—/g, "").trim())}</h2>
@@ -436,6 +437,7 @@ function present(item) {
 
 function apply(item) {
   if (item.type === "event") {
+    if (S.events.some((e) => e.id === item.ev.id)) return;   // 同一条只渲染一次
     if (item.state) { S.state = item.state; renderMeBar(); renderPlayers(); }
     S.events.push(item.ev);
     renderLog();
@@ -457,7 +459,8 @@ async function drain() {
       const next = Q.items.find((x) => x.type === "event" && narration(x.ev));
       if (next) audioURL(narration(next.ev).seat, narration(next.ev).text).catch(() => {});
       await playLine(line.seat, line.text, it.ev.id);
-      if (TTS.blocked) { Q.items.unshift(it); break; }   // 被浏览器拦了，等用户点一下再续
+      // 被浏览器的自动播放策略拦了：文字继续往下走，别把已经渲染过的这条塞回队首
+      // （塞回去会在续播时二次渲染，就是「同一句出现两遍」的来源）
     } else {
       await new Promise((r) => setTimeout(r, 220));      // 不念的条目也留一点节奏
     }

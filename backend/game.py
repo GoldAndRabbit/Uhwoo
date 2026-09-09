@@ -425,20 +425,20 @@ class Game:
     async def _day(self) -> None:
         self.phase = "day"
         self._emit("phase", f"—— 第 {self.round} 天 ——")
-        self._judge(f"天亮了。现在是第 {self.round} 天。")
-        if self.night_death is None:
-            self._emit("result", "昨晚是平安夜。")
-        else:
-            self._emit("result", f"昨晚 {self.night_death} 号 倒牌出局，不留遗言。")
+        dead = ("昨晚是平安夜。" if self.night_death is None
+                else f"昨晚 {self.night_death} 号 倒牌出局，不留遗言。")
+        # 法官一口气报完：天数 + 死讯 + 发言顺序，别拆成三条
         if self._winner():
+            self._judge(f"天亮了。现在是第 {self.round} 天。{dead}")
             return
 
         alive = self.alive
         start = self.rng.choice(alive)
         i = alive.index(start)
         order = alive[i:] + alive[:i]
+        self._judge(f"天亮了。现在是第 {self.round} 天。{dead}"
+                    f"现在开始发言，从 {start} 号开始。")
         self._emit("system", f"存活玩家：{alive}，发言顺序：{order}。", order=order)
-        self._judge(f"现在开始发言，从 {start} 号开始。")
 
         for seat in order:
             p = self.player(seat)
