@@ -387,15 +387,25 @@ function startReveal(ev) {
   const el = document.querySelector(`.row[data-eid="${ev.id}"] .bubble`);
   if (!el) return () => {};
   const full = el.textContent;
-  const chars = [...full].map((c) => {
-    if (c === " " || c === "\n") return document.createTextNode(c);
+
+  // 按小段切（遇到标点断一下，否则每 4 个字一段）。一个字一个字地蹦太碎，
+  // 成段淡入更接近正常说话的节奏
+  const chunks = [];
+  let buf = "";
+  for (const ch of full) {
+    buf += ch;
+    if (buf.length >= 4 || "。！？，、；：…—".includes(ch)) { chunks.push(buf); buf = ""; }
+  }
+  if (buf) chunks.push(buf);
+
+  el.textContent = "";
+  const spans = chunks.map((t) => {
     const sp = document.createElement("span");
-    sp.className = "ch";
-    sp.textContent = c;
+    sp.className = "ck";                 // 默认 display:none，所以气泡是跟着长高的
+    sp.textContent = t;
+    el.appendChild(sp);
     return sp;
   });
-  el.textContent = "";
-  chars.forEach((c) => el.appendChild(c));
   el.classList.add("revealing");
 
   const box = $("log").parentElement;
@@ -404,11 +414,9 @@ function startReveal(ev) {
   let shown = 0, stopped = false;
 
   const show = (n) => {
+    if (n <= shown) return;
     const follow = nearBottom();
-    for (; shown < n && shown < chars.length; shown++) {
-      const c = chars[shown];
-      if (c.classList) c.classList.add("on");
-    }
+    for (; shown < n && shown < spans.length; shown++) spans[shown].classList.add("on");
     if (follow) box.scrollTop = box.scrollHeight;
   };
 
@@ -416,14 +424,14 @@ function startReveal(ev) {
     if (stopped) return;
     const a = TTS.audio, d = a.duration;
     if (d && isFinite(d) && d > 0)
-      show(Math.ceil(chars.length * Math.min(1, a.currentTime / d)));
+      show(Math.ceil(spans.length * Math.min(1, a.currentTime / d)));
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 
   return () => {                       // 播完/被打断都要把整句补齐，别卡在半截
     stopped = true;
-    show(chars.length);
+    show(spans.length);
     el.classList.remove("revealing");
   };
 }
