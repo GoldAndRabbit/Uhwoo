@@ -374,9 +374,12 @@ async function playLine(seat, text) {
     TTS.audio.src = await audioURL(seat, text);
     await TTS.audio.play();
     TTS.blocked = false;
-    await new Promise((res) => { TTS.audio.onended = res; TTS.audio.onerror = res; });
+    // pause() 不会触发 ended，所以把 resolve 留一份出去，停止时能直接叫醒这个 await
+    await new Promise((res) => { TTS.finish = res; TTS.audio.onended = res; TTS.audio.onerror = res; });
   } catch (e) {
     if (e && e.name === "NotAllowedError") TTS.blocked = true;   // 自动播放被拦，等下一次点击
+  } finally {
+    TTS.finish = null;
   }
 }
 
@@ -441,6 +444,7 @@ function stopSpeaking() {
   Q.items.length = 0;
   TTS.audio.pause();
   TTS.audio.currentTime = 0;
+  if (TTS.finish) TTS.finish();        // 叫醒正卡在「等播完」的那个 await，否则 drain 会一直挂着
   Q.busy = false;
 }
 
@@ -478,6 +482,9 @@ async function stopGame() {
   $("btnStop").disabled = true;
   $("barStop").disabled = true;
   renderAsk(null);
+  // 停止要两三秒才真正生效，这期间在途的发言还会推过来 —— 先把朗读关掉，
+  // 否则它们照样排进播放队列，人已经点了停止还在念
+  TTS.on = false;
   stopSpeaking();
   await fetch("/api/stop", { method: "POST" });
 }

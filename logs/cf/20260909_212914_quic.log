@@ -79,3 +79,4 @@
 2026-09-09T14:34:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
 2026-09-09T14:39:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
 2026-09-09T14:44:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
+2026-09-09T14:49:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
