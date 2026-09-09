@@ -24,8 +24,15 @@ _task: asyncio.Task | None = None
 
 
 @app.get("/")
-async def index() -> FileResponse:
-    return FileResponse(FRONTEND / "index.html")
+async def index() -> Response:
+    """首页不缓存，静态资源带上按 mtime 生成的版本号 —— 否则改了前端，
+    Cloudflare 边缘和浏览器还在发旧的 app.js。"""
+    html = (FRONTEND / "index.html").read_text(encoding="utf-8")
+    for name in ("style.css", "app.js"):
+        ver = int((FRONTEND / name).stat().st_mtime)
+        html = html.replace(f"/static/{name}", f"/static/{name}?v={ver}")
+    return Response(html, media_type="text/html; charset=utf-8",
+                    headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/config")

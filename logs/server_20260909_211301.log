@@ -326,3 +326,46 @@ INFO:     192.220.34.49:0 - "GET /api/snapshot HTTP/1.1" 200 OK
 INFO:     192.220.34.49:0 - "POST /api/start HTTP/1.1" 200 OK
 INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
 chat 失败 (RemoteProtocolError)，0.6s 后第 2/4 次重试
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET / HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     192.220.34.49:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/start HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/start HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "POST /api/tts HTTP/1.1" 200 OK
+INFO:     192.220.34.49:0 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)

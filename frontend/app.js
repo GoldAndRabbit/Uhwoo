@@ -214,7 +214,33 @@ function connect() {
 }
 
 /* ---------------- 朗读 ---------------- */
-const TTS = { on: false, ok: false, q: [], playing: false, audio: new Audio(), urls: new Map() };
+const TTS = { on: false, ok: false, q: [], playing: false, audio: new Audio(), urls: new Map(),
+              unlocked: false, blocked: false };
+TTS.audio.preload = "auto";
+TTS.audio.playsInline = true;
+
+// iOS / Safari 只认「用户手势里同步调用的 play()」。我们的音频要等 fetch 回来才播，
+// 那会儿手势早过期了，所以点按钮的当下先拿一段无声 wav 把这个 audio 元素解锁，
+// 之后再换 src 播真正的语音就不会被拦。必须同步调用，前面不能有 await。
+const SILENT_WAV = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
+
+function unlockAudio() {
+  if (TTS.unlocked || !TTS.ok) return;
+  try {
+    TTS.audio.src = SILENT_WAV;
+    const p = TTS.audio.play();
+    if (p && p.then) {
+      p.then(() => { TTS.audio.pause(); TTS.unlocked = true; TTS.blocked = false; })
+       .catch(() => { TTS.blocked = true; });
+    } else {
+      TTS.unlocked = true;
+    }
+  } catch (e) { TTS.blocked = true; }
+}
+
+// 万一解锁没赶上（比如刷新页面接上正在跑的一局），下一次点页面任意处补一次
+document.addEventListener("pointerdown", () => { unlockAudio(); if (TTS.blocked) pump(); },
+                          { capture: true });
 
 async function audioURL(seat, text) {
   const key = seat + "|" + text;
@@ -244,8 +270,16 @@ async function pump() {
   try {
     TTS.audio.src = await audioURL(seat, text);
     await TTS.audio.play();
+    TTS.blocked = false;
     await new Promise((res) => { TTS.audio.onended = res; TTS.audio.onerror = res; });
-  } catch (e) { /* 合成或播放失败就跳过这句 */ }
+  } catch (e) {
+    if (e && e.name === "NotAllowedError") {       // 被自动播放策略拦了，等下一次点击再续
+      TTS.blocked = true;
+      TTS.q.unshift({ seat, text });
+      TTS.playing = false;
+      return;
+    }
+  }
   TTS.playing = false;
   pump();
 }
@@ -259,6 +293,7 @@ function stopSpeaking() {
 
 /* ---------------- 交互 ---------------- */
 $("btnStart").addEventListener("click", async () => {
+  unlockAudio();                                   // 必须在 await 之前，手势才有效
   $("btnStart").disabled = true;
   S.readonly = false;
   stopSpeaking();
@@ -281,6 +316,7 @@ $("btnStop").addEventListener("click", async () => {
 });
 
 $("ttsOn").addEventListener("change", (e) => {
+  if (e.target.checked) unlockAudio();
   TTS.on = TTS.ok && e.target.checked;
   try { localStorage.setItem("ww_tts", TTS.on ? "1" : "0"); } catch (_) {}
   if (!TTS.on) stopSpeaking();                    // 中途取消勾选就立刻闭麦
@@ -290,6 +326,7 @@ $("ttsOn").addEventListener("change", (e) => {
 $("log").addEventListener("click", (e) => {
   const b = e.target.closest(".bubble.say");
   if (!b || !TTS.ok) return;
+  unlockAudio();
   stopSpeaking();
   TTS.on = true;
   $("ttsOn").checked = true;
