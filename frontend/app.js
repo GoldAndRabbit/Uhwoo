@@ -427,12 +427,16 @@ function startReveal(ev) {
       show(Math.ceil(spans.length * Math.min(1, a.currentTime / d)));
     requestAnimationFrame(tick);
   };
-  requestAnimationFrame(tick);
 
-  return () => {                       // 播完/被打断都要把整句补齐，别卡在半截
-    stopped = true;
-    show(spans.length);
-    el.classList.remove("revealing");
+  return {
+    // 必须等 play() 真的开始了才推进：在那之前 audio 还停在上一句播完的位置
+    // （currentTime≈duration），比例算出来是 100%，整段会立刻吐光
+    start: () => requestAnimationFrame(tick),
+    finish: () => {                    // 播完/被打断都要把整句补齐，别卡在半截
+      stopped = true;
+      show(spans.length);
+      el.classList.remove("revealing");
+    },
   };
 }
 
@@ -446,12 +450,13 @@ function markPlaying(eid) {
   });
 }
 
-async function playLine(seat, text, eid = null) {
+async function playLine(seat, text, eid = null, onStart = null) {
   markPlaying(eid);
   try {
     TTS.audio.src = await audioURL(seat, text);
     await TTS.audio.play();
     TTS.blocked = false;
+    if (onStart) onStart();            // 这一刻起 currentTime 才是新音频的时间轴
     // pause() 不会触发 ended，所以把 resolve 留一份出去，停止时能直接叫醒这个 await
     await new Promise((res) => { TTS.finish = res; TTS.audio.onended = res; TTS.audio.onerror = res; });
   } catch (e) {
@@ -516,9 +521,9 @@ async function drain() {
     if (line && line.text) {
       const next = Q.items.find((x) => x.type === "event" && narration(x.ev));
       if (next) audioURL(narration(next.ev).seat, narration(next.ev).text).catch(() => {});
-      const done = startReveal(it.ev);
-      await playLine(line.seat, line.text, it.ev.id);
-      done();
+      const reveal = startReveal(it.ev);      // 先把文字藏起来，等真的开播再逐段放
+      await playLine(line.seat, line.text, it.ev.id, reveal.start);
+      reveal.finish();
       // 被浏览器的自动播放策略拦了：文字继续往下走，别把已经渲染过的这条塞回队首
       // （塞回去会在续播时二次渲染，就是「同一句出现两遍」的来源）
     } else {
