@@ -69,7 +69,7 @@ async def start(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     model = body.get("model") or cfg.model
     if model not in cfg.models:
         raise HTTPException(400, f"未知模型 {model}")
-    mode = body.get("mode") or "sim"
+    mode = body.get("mode") or "play"
     if mode not in ("sim", "play"):
         raise HTTPException(400, f"未知模式 {mode}")
     gid = time.strftime("%Y%m%d%H%M%S")
