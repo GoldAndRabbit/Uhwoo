@@ -319,9 +319,6 @@ class Game:
         self.phase = "开局"
         names = "、".join(p.name for p in self.players)
         self._emit("system", f"游戏开始，共 6 名玩家：{names}。配置：2 狼人、2 平民、1 预言家、1 守卫。")
-        self._sys_call("系统全局状态 开局", "发牌与阵营划分",
-                       {"座位": {p.name: p.role.value for p in self.players},
-                        "狼队": [f"{s}号" for s in self.wolves], "seed": self.seed})
         try:
             while self.round < 8:
                 self.round += 1

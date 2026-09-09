@@ -142,6 +142,16 @@ function renderLog() {
     `<div class="empty">点「开一局」，这里会逐条出现夜里的行动和白天的发言。</div>`;
 }
 
+const PLAY_ICON = '<svg viewBox="0 0 12 14" width="10" height="12"><path d="M1 1l10 6-10 6z" fill="currentColor"/></svg>';
+const WAVE_ICON = '<i class="wave"><b></b><b></b><b></b></i>';
+
+function playBtn(ev) {
+  if (!TTS.ok || !speakable(ev)) return "";
+  const on = TTS.playingId === ev.id;
+  return `<button class="play${on ? " on" : ""}" data-eid="${ev.id}"
+           title="${on ? "停止" : "播放这一句"}">${on ? WAVE_ICON : PLAY_ICON}</button>`;
+}
+
 function rowHTML(ev) {
   const only = audienceLabel(ev.audience);
   const onlyTag = only ? `<span class="only">${only}</span>` : "";
@@ -157,24 +167,23 @@ function rowHTML(ev) {
     const body = ev.text.replace(/^[^：]*：/, "");
     return `<div class="row"><div class="who">${avatar(role)}
         <span class="badge r-${role || "平民"}">${seat}号${role ? " " + role : ""}</span></div>
-      <div class="bubble say" data-seat="${seat}" data-text="${esc(body)}"
-           title="点一下重听">${esc(body)}</div></div>`;
+      <div class="bubble say">${esc(body)}</div>${playBtn(ev)}</div>`;
   }
   if (ev.kind === "vote")
     return `<div class="row">${onlyTag}<div class="bubble plain vote">${esc(ev.text)}</div></div>`;
   if (ev.kind === "judge")
     return `<div class="row"><span class="badge judge">法官</span>
-      <div class="bubble judgeline">${esc(ev.text)}</div></div>`;
+      <div class="bubble judgeline">${esc(ev.text)}</div>${playBtn(ev)}</div>`;
   if (ev.kind === "result")
     return `<div class="row"><span class="badge judge">法官</span>
-      <div class="bubble result">${esc(ev.text)}</div></div>`;
+      <div class="bubble result">${esc(ev.text)}</div>${playBtn(ev)}</div>`;
   if (ev.kind === "night_action") {
     const role = ev.seat ? roleOf(ev.seat) : "";
     const badge = ev.seat
       ? `<div class="who">${avatar(role)}
            <span class="badge r-${role || "平民"}">${ev.seat}号${role ? " " + role : ""}</span></div>` : "";
     return `<div class="row">${badge}${onlyTag}
-      <div class="bubble ${only ? "wolfnight" : ""}">${esc(ev.text)}</div></div>`;
+      <div class="bubble ${only ? "wolfnight" : ""}">${esc(ev.text)}</div>${playBtn(ev)}</div>`;
   }
   return `<div class="row">${onlyTag}<div class="bubble plain">${esc(ev.text)}</div></div>`;
 }
@@ -369,7 +378,18 @@ async function audioURL(seat, text) {
   return p;
 }
 
-async function playLine(seat, text) {
+function markPlaying(eid) {
+  TTS.playingId = eid;
+  document.querySelectorAll(".play").forEach((b) => {
+    const on = String(eid) === b.dataset.eid;
+    b.classList.toggle("on", on);
+    b.innerHTML = on ? WAVE_ICON : PLAY_ICON;
+    b.title = on ? "停止" : "播放这一句";
+  });
+}
+
+async function playLine(seat, text, eid = null) {
+  markPlaying(eid);
   try {
     TTS.audio.src = await audioURL(seat, text);
     await TTS.audio.play();
@@ -380,22 +400,27 @@ async function playLine(seat, text) {
     if (e && e.name === "NotAllowedError") TTS.blocked = true;   // 自动播放被拦，等下一次点击
   } finally {
     TTS.finish = null;
+    markPlaying(null);
   }
 }
 
-// 这一条要不要念、用谁的声音念
-function narration(ev) {
+// 这一条能不能念、用谁的声音念（手动点播放用这个，范围宽一些）
+function speakable(ev) {
   if (ev.kind === "speech")
     return { seat: ev.seat, text: ev.text.replace(/^[^：]*：/, "") };
   if (ev.kind === "phase")
     return { seat: JUDGE, text: ev.text.replace(/—/g, "").trim() };
-  if (ev.kind === "result" || ev.kind === "judge")
+  if (ev.kind === "result" || ev.kind === "judge" || ev.kind === "night_action")
     return { seat: JUDGE, text: ev.text };
   if (ev.kind === "system" && ev.text.startsWith("存活玩家"))
     return { seat: JUDGE, text: ev.text };
-  if (ev.kind === "night_action" && isPlay())        // 单人模式下这些是你自己的私密信息
-    return { seat: JUDGE, text: ev.text };
-  return null;
+  return null;                                       // 逐条票型太碎，不念
+}
+
+// 自动朗读只念叙事主线：发言 + 法官报幕。夜里的私密行动只在单人模式下念给你自己听
+function narration(ev) {
+  if (ev.kind === "night_action" && !isPlay()) return null;
+  return speakable(ev);
 }
 
 /* 演出队列：{type:"event"|"prompt", ...} */
@@ -429,7 +454,7 @@ async function drain() {
     if (line && line.text) {
       const next = Q.items.find((x) => x.type === "event" && narration(x.ev));
       if (next) audioURL(narration(next.ev).seat, narration(next.ev).text).catch(() => {});
-      await playLine(line.seat, line.text);
+      await playLine(line.seat, line.text, it.ev.id);
       if (TTS.blocked) { Q.items.unshift(it); break; }   // 被浏览器拦了，等用户点一下再续
     } else {
       await new Promise((r) => setTimeout(r, 220));      // 不念的条目也留一点节奏
@@ -507,15 +532,17 @@ $("ttsOn").addEventListener("change", (e) => {
   if (!TTS.on) stopSpeaking();                    // 中途取消勾选就立刻闭麦
 });
 
-// 点发言气泡可以重听这一句
+// 每条气泡后面的播放按钮：正在响就停，否则单独播这一句
 $("log").addEventListener("click", (e) => {
-  const b = e.target.closest(".bubble.say");
-  if (!b || !TTS.ok) return;
+  const btn = e.target.closest(".play");
+  if (!btn || !TTS.ok) return;
   unlockAudio();
+  const eid = Number(btn.dataset.eid);
+  if (TTS.playingId === eid) { stopSpeaking(); markPlaying(null); return; }
   stopSpeaking();
-  TTS.on = true;
-  $("ttsOn").checked = true;
-  playLine(Number(b.dataset.seat), b.dataset.text);
+  const ev = S.events.find((x) => x.id === eid);
+  const line = ev && speakable(ev);
+  if (line) playLine(line.seat, line.text, eid);
 });
 
 $("btnNew").addEventListener("click", startGame);

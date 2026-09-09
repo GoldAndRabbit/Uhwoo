@@ -55,6 +55,17 @@ button{font:inherit;cursor:pointer;}
 .r-守卫{background:var(--guard-bg);color:var(--guard-fg);}
 .r-平民{background:var(--vill-bg);color:var(--vill-fg);}
 .judge{background:#e8e4f0;color:#4b3f6b;}
+.play{flex:0 0 auto;margin-top:6px;width:26px;height:26px;border-radius:50%;
+      border:1px solid var(--line);background:var(--panel);color:#8b867c;
+      display:flex;align-items:center;justify-content:center;padding:0;}
+.play:hover{color:#c0392b;border-color:#e0c4c0;}
+.play.on{color:#c0392b;border-color:#e0c4c0;background:#fdf3f2;}
+.wave{display:flex;align-items:center;gap:2px;height:12px;}
+.wave b{width:2px;height:4px;background:currentColor;border-radius:1px;
+        animation:wv .9s ease-in-out infinite;}
+.wave b:nth-child(2){animation-delay:.15s;}
+.wave b:nth-child(3){animation-delay:.3s;}
+@keyframes wv{0%,100%{height:4px}50%{height:12px}}
 .bubble.judgeline{background:#f4f2f8;color:#4b3f6b;}
 .ava{width:76px;height:76px;border-radius:14px;object-fit:cover;flex:0 0 auto;
      background:#efece6;border:1px solid var(--line);}
