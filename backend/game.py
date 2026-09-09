@@ -25,7 +25,7 @@ class Game:
 
     def __init__(self, gid: str, seed: int | None = None, use_api: bool | None = None,
                  model: str | None = None, tts: bool = False, mode: str = "sim",
-                 human_seat: int | None = None):
+                 human_seat: int | None = None, human_role: str | None = None):
         self.gid = gid
         self.tts = bool(tts) and tts_mod.available()
         self.mode = mode if mode in ("sim", "play") else "sim"
@@ -57,10 +57,17 @@ class Game:
         self.claimed_seer: int | None = None
         self.suspicion: dict[int, float] = {p.seat: 0.0 for p in self.players}
 
-        # 游玩模式：随机坐一个座位，其余 5 个交给模型。视野严格按这个座位裁。
+        # 游玩模式：坐一个座位，其余 5 个交给模型。视野严格按这个座位裁。
+        # 指定了身份就从该身份的座位里挑一个（2 狼 2 民各有两个位置），否则随机坐。
         self.human: int | None = None
         if self.mode == "play":
-            self.human = human_seat if human_seat in range(1, 7) else self.rng.randint(1, 6)
+            if human_seat in range(1, 7):
+                self.human = human_seat
+            elif human_role:
+                pool = [p.seat for p in self.players if p.role.value == human_role]
+                self.human = self.rng.choice(pool) if pool else self.rng.randint(1, 6)
+            else:
+                self.human = self.rng.randint(1, 6)
         self.pending: dict[str, Any] | None = None     # 当前等你回答的问题
         self._answer: asyncio.Future | None = None
 
@@ -457,7 +464,6 @@ class Game:
         # 投票
         votes: dict[int, int] = {}
         voters = [s for s in order if self.player(s).alive]
-        reasons: dict[int, str] = {}
 
         async def vote_one(seat: int) -> None:
             p = self.player(seat)
@@ -465,15 +471,12 @@ class Game:
             out = await self._ask(p, "vote", f"{p.name} 第{self.round}天投票", instr, schema)
             pool = [s for s in self.alive if s != seat]
             votes[seat] = self._coerce(out.get("target"), pool, self.rng)
-            reasons[seat] = str(out.get("reason", "")).strip()
 
         await self._gather(*(vote_one(s) for s in voters))   # 投票是同时的，所以并发
-        for seat in voters:
+        for seat in voters:                                  # 投票不留理由，只报票型
             t = votes[seat]
             self.suspicion[t] = self.suspicion.get(t, 0.0) + 1.0
-            why = reasons[seat]
-            self._emit("vote", f"{self.player(seat).name} → {t}号" + (f"：{why}" if why else ""),
-                       seat=seat, target=t)
+            self._emit("vote", f"{self.player(seat).name} → {t}号", seat=seat, target=t)
 
         tally: dict[int, int] = {}
         for t in votes.values():

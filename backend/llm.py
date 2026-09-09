@@ -172,7 +172,6 @@ class LLMClient:
                 t = pick(pool, lambda s: (3.0 if s == claimed_seer else 0.0) + self.rng.random())
             else:
                 t = pick(others, lambda s: sus.get(s, 0.0) + self.rng.random())
-            return {"thinking": f"综合今天的发言，{t} 号最像狼。", "target": t,
-                    "reason": f"投 {t} 号，发言站边模糊、逻辑对不上。"}
+            return {"thinking": f"综合今天的发言，{t} 号最像狼。", "target": t}
 
         return {"thinking": "", "target": others[0] if others else me}

@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import tts
 from .game import GAMES_DIR, Game
+from .model import Role
 from .llm import has_credentials
 from .llm_api import load_config
 
@@ -62,8 +63,11 @@ async def start(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     if mode not in ("sim", "play"):
         raise HTTPException(400, f"未知模式 {mode}")
     gid = time.strftime("%Y%m%d%H%M%S")
+    role = body.get("role") or None
+    if role and role not in [r.value for r in Role]:
+        raise HTTPException(400, f"未知身份 {role}")
     _game = Game(gid, model=model, tts=bool(body.get("tts")), mode=mode,
-                 human_seat=body.get("seat"))
+                 human_seat=body.get("seat"), human_role=role)
     _task = asyncio.create_task(_game.run())
     return {"gid": gid, "state": _game.state()}
 
@@ -84,7 +88,8 @@ async def answer(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
         options = _game.pending.get("options") or []
         if options and payload["target"] not in options:
             raise HTTPException(400, f"只能选 {options}")
-        payload["reason"] = str(body.get("reason", "")).strip()[:200]
+        if _game.pending["kind"] == "wolf":       # 只有狼队夜里商议要给队友一句话
+            payload["reason"] = str(body.get("reason", "")).strip()[:200]
     else:
         text = str(body.get("speech", "")).strip()
         if not text:

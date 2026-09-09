@@ -455,7 +455,10 @@ async function startGame() {
   TTS.on = TTS.ok && $("ttsOn").checked;          // 以点开一局这一刻的勾选为准
   const r = await fetch("/api/start", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: $("modelSel").value, tts: TTS.on, mode: $("modeSel").value }),
+    body: JSON.stringify({
+      model: $("modelSel").value, tts: TTS.on, mode: $("modeSel").value,
+      role: $("modeSel").value === "play" ? $("roleSel").value : "",
+    }),
   });
   if (!r.ok) {
     alert((await r.json()).detail);
@@ -478,6 +481,12 @@ async function stopGame() {
   stopSpeaking();
   await fetch("/api/stop", { method: "POST" });
 }
+
+function syncModeUI() {                       // 身份只在游玩模式下用得上
+  $("roleField").hidden = $("modeSel").value !== "play";
+}
+$("modeSel").addEventListener("change", syncModeUI);
+syncModeUI();
 
 $("btnStart").addEventListener("click", startGame);
 $("btnStop").addEventListener("click", stopGame);
@@ -523,7 +532,7 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
   if (!snap.empty) {
     S.state = snap.state; S.events = snap.events; S.calls = snap.calls;
     renderAsk(snap.state.pending);        // 刚进页面就正轮到你的话，直接把问题摆出来
-    if (snap.state.status === "running") $("modeSel").value = snap.state.mode;
+    if (snap.state.status === "running") { $("modeSel").value = snap.state.mode; syncModeUI(); }
     renderAll();
     if (snap.state.status === "running") connect();
   } else {

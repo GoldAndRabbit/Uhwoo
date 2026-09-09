@@ -114,12 +114,9 @@ def vote_instruction(rnd: int, alive: list[int], me: int) -> tuple[str, dict]:
     pool = [s for s in alive if s != me]
     text = (
         f"发言结束，现在投票放逐一名玩家。可投对象：{pool}（不能投自己）。\n"
-        "结合今天所有发言给出你的票。\n\n"
+        "结合今天所有发言给出你的票。投票是无声的，不用给理由。\n\n"
         "输出 JSON，字段如下：\n{\n"
         '  "thinking": 你的推理（不会被别人看到）,\n'
-        '  "target": 你要投的座位号（整数）,\n'
-        '  "reason": 一句话投票理由（公开）\n}'
+        '  "target": 你要投的座位号（整数）\n}'
     )
-    return text, _schema(
-        {"thinking": THINKING, "target": {"type": "integer", "enum": pool}, "reason": {"type": "string"}}
-    )
+    return text, _schema({"thinking": THINKING, "target": {"type": "integer", "enum": pool}})
