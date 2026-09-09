@@ -99,3 +99,5 @@
 2026-09-09T15:47:06Z ERR Request failed error="unexpected EOF" connIndex=1 dest=http://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
 2026-09-09T15:47:06Z ERR  error="unexpected EOF" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
 2026-09-09T15:47:06Z ERR Request failed error="unexpected EOF" connIndex=1 dest=https://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T15:49:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
+2026-09-09T15:54:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"

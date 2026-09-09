@@ -381,33 +381,50 @@ async function audioURL(seat, text) {
 }
 
 // 自动朗读时，文字跟着音频逐字浮出来 —— 按 currentTime/duration 推进，
-// 所以念多快字就出多快，不是固定速度的打字机
+// 所以念多快字就出多快，不是固定速度的打字机。每个字是一个 span，
+// 靠 opacity + 微微上移的过渡柔和地淡进来。
 function startReveal(ev) {
   const el = document.querySelector(`.row[data-eid="${ev.id}"] .bubble`);
   if (!el) return () => {};
   const full = el.textContent;
+  const chars = [...full].map((c) => {
+    if (c === " " || c === "\n") return document.createTextNode(c);
+    const sp = document.createElement("span");
+    sp.className = "ch";
+    sp.textContent = c;
+    return sp;
+  });
   el.textContent = "";
+  chars.forEach((c) => el.appendChild(c));
   el.classList.add("revealing");
+
   const box = $("log").parentElement;
-  let stopped = false;
+  // 只有当你本来就贴着底部时才自动跟随；往上翻了就别再把人拽回去
+  const nearBottom = () => box.scrollHeight - box.scrollTop - box.clientHeight < 90;
+  let shown = 0, stopped = false;
+
+  const show = (n) => {
+    const follow = nearBottom();
+    for (; shown < n && shown < chars.length; shown++) {
+      const c = chars[shown];
+      if (c.classList) c.classList.add("on");
+    }
+    if (follow) box.scrollTop = box.scrollHeight;
+  };
+
   const tick = () => {
     if (stopped) return;
     const a = TTS.audio, d = a.duration;
-    if (d && isFinite(d) && d > 0) {
-      const n = Math.ceil(full.length * Math.min(1, a.currentTime / d));
-      if (n !== el.textContent.length) {
-        el.textContent = full.slice(0, n);
-        box.scrollTop = box.scrollHeight;
-      }
-    }
+    if (d && isFinite(d) && d > 0)
+      show(Math.ceil(chars.length * Math.min(1, a.currentTime / d)));
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+
   return () => {                       // 播完/被打断都要把整句补齐，别卡在半截
     stopped = true;
-    el.textContent = full;
+    show(chars.length);
     el.classList.remove("revealing");
-    box.scrollTop = box.scrollHeight;
   };
 }
 
@@ -471,10 +488,11 @@ function apply(item) {
   if (item.type === "event") {
     if (S.events.some((e) => e.id === item.ev.id)) return;   // 同一条只渲染一次
     if (item.state) { S.state = item.state; renderMeBar(); renderPlayers(); }
+    const box = $("log").parentElement;
+    const follow = box.scrollHeight - box.scrollTop - box.clientHeight < 90;
     S.events.push(item.ev);
     renderLog();
-    const box = $("log").parentElement;
-    box.scrollTop = box.scrollHeight;
+    if (follow) box.scrollTop = box.scrollHeight;   // 你翻上去看历史时不打断
   } else if (item.type === "prompt") {
     renderAsk(item.p);
   }

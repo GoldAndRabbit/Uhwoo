@@ -120,6 +120,9 @@ details[open] summary::before{content:"▾ ";}
       padding:1px 9px;font-size:11px;white-space:nowrap;margin-top:7px;}
 .bubble{background:#f4f2ee;border-radius:10px;padding:7px 12px;max-width:860px;}
 .bubble.revealing{min-height:1.65em;}
+.bubble .ch{opacity:0;transform:translateY(3px);display:inline-block;
+  transition:opacity .28s ease, transform .28s cubic-bezier(.4,0,.2,1);}
+.bubble .ch.on{opacity:1;transform:none;}
 .bubble.revealing::after{content:"";display:inline-block;width:2px;height:1em;
   vertical-align:-2px;margin-left:1px;background:currentColor;opacity:.35;
   animation:caret .8s steps(2) infinite;}
