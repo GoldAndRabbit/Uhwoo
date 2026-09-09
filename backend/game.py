@@ -125,7 +125,7 @@ class Game:
             return ev.seat, ev.text.split("：", 1)[-1]
         if ev.kind == "phase":
             return self.JUDGE_VOICE, ev.text.replace("—", "").strip()
-        if ev.kind == "result":
+        if ev.kind in ("result", "judge"):
             return self.JUDGE_VOICE, ev.text
         if ev.kind == "system" and ev.text.startswith("存活玩家"):
             return self.JUDGE_VOICE, ev.text
@@ -147,6 +147,10 @@ class Game:
                 pass
 
         asyncio.get_running_loop().create_task(go())
+
+    def _judge(self, text: str) -> Event:
+        """法官（上帝）报幕。纯固定台词，不过模型，两种模式都有。"""
+        return self._emit("judge", text)
 
     def _visible(self, ev: Event) -> bool:
         """模拟模式是上帝视角，全看得到；游玩模式只推你这个座位看得到的。"""
@@ -335,6 +339,7 @@ class Game:
         """守卫 / 狼队 / 预言家在同一个夜里同时行动，三条线并发跑（狼队内部仍按顺序商议）。"""
         self.phase = "night"
         self._emit("phase", f"—— 第 {self.round} 夜 ——")
+        self._judge(f"天黑请闭眼。现在是第 {self.round} 夜。")
         guarded: int | None = None
         target: int | None = None
 
@@ -388,9 +393,8 @@ class Game:
             t = self._coerce(out.get("target"), pool, self.rng)
             result = "狼人" if self.player(t).role is Role.WOLF else "好人"
             self.seer_checks[t] = result
-            self._emit("night_action", f"（第 {self.round} 夜你查验了 {t} 号）",
-                       audience=[seer.seat], seat=seer.seat)
-            self._emit("night_action", f"【查验结果】{t} 号的身份是：{result}。",
+            self._emit("night_action",
+                       f"（第 {self.round} 夜你查验了 {t} 号）结果：{t} 号是{result}。",
                        audience=[seer.seat], seat=seer.seat)
 
         await self._gather(guard_step(), wolf_step(), seer_step())
@@ -419,6 +423,7 @@ class Game:
     async def _day(self) -> None:
         self.phase = "day"
         self._emit("phase", f"—— 第 {self.round} 天 ——")
+        self._judge(f"天亮了。现在是第 {self.round} 天。")
         if self.night_death is None:
             self._emit("result", "昨晚是平安夜。")
         else:
@@ -431,6 +436,7 @@ class Game:
         i = alive.index(start)
         order = alive[i:] + alive[:i]
         self._emit("system", f"存活玩家：{alive}，发言顺序：{order}。", order=order)
+        self._judge(f"现在开始发言，从 {start} 号开始。")
 
         for seat in order:
             p = self.player(seat)

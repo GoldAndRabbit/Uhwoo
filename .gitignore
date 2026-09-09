@@ -4,3 +4,5 @@ __pycache__/
 .env
 logs/
 data/tts/
+# 原图 20MB+，仓库里只放 frontend/img/roles 下的 320px 版本
+assets/

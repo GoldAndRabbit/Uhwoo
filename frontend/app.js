@@ -17,6 +17,11 @@ const kchars = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const roleOf = (seat) => S.state?.players?.find((p) => p.seat === seat)?.role || "";
 const isPlay = () => S.state?.mode === "play";
+
+// 身份头像。游玩模式下别人的 role 是 null，自然就不会有头像，逻辑不用另写
+const ROLE_IMG = { "守卫": "guard", "平民": "villager", "狼人": "wolf", "预言家": "seer" };
+const avatar = (role, cls = "ava") =>
+  ROLE_IMG[role] ? `<img class="${cls}" src="/static/img/roles/${ROLE_IMG[role]}.png" alt="${role}">` : "";
 const audienceLabel = (a) =>
   a === "all" ? null : "仅 " + a.map((s) => s + "号").join("/");
 
@@ -33,6 +38,7 @@ function renderPlayers() {
     const tag = p.role ? `<span class="rtag r-${p.role}">${p.role}</span>`
                        : `<span class="rtag r-平民">?</span>`;
     return `<div class="prow${active}${dead}" data-seat="${p.seat}">
+      ${avatar(p.role) || '<span class="ava blank"></span>'}
       <span class="pname">${p.seat}号</span>${tag}${me}
       <span class="pmeta">${meta}</span></div>`;
   });
@@ -61,7 +67,6 @@ function renderPlayers() {
   const aliveN = st.players.filter((p) => p.alive).length;
   $("aliveCount").textContent = `${aliveN}/${st.players.length} 存活`;
   $("callCount").textContent = st.calls;
-  $("tabBadge").textContent = st.calls;
   $("navCalls").textContent = st.calls;
 }
 
@@ -150,19 +155,24 @@ function rowHTML(ev) {
   if (ev.kind === "speech") {
     const seat = ev.seat, role = roleOf(seat);
     const body = ev.text.replace(/^[^：]*：/, "");
-    return `<div class="row"><span class="badge r-${role || "平民"}">${seat}号${role ? " " + role : ""}</span>
+    return `<div class="row"><div class="who">${avatar(role)}
+        <span class="badge r-${role || "平民"}">${seat}号${role ? " " + role : ""}</span></div>
       <div class="bubble say" data-seat="${seat}" data-text="${esc(body)}"
            title="点一下重听">${esc(body)}</div></div>`;
   }
   if (ev.kind === "vote")
     return `<div class="row">${onlyTag}<div class="bubble plain vote">${esc(ev.text)}</div></div>`;
+  if (ev.kind === "judge")
+    return `<div class="row"><span class="badge judge">法官</span>
+      <div class="bubble judgeline">${esc(ev.text)}</div></div>`;
   if (ev.kind === "result")
     return `<div class="row"><span class="badge judge">法官</span>
       <div class="bubble result">${esc(ev.text)}</div></div>`;
   if (ev.kind === "night_action") {
     const role = ev.seat ? roleOf(ev.seat) : "";
     const badge = ev.seat
-      ? `<span class="badge r-${role || "平民"}">${ev.seat}号${role ? " " + role : ""}</span>` : "";
+      ? `<div class="who">${avatar(role)}
+           <span class="badge r-${role || "平民"}">${ev.seat}号${role ? " " + role : ""}</span></div>` : "";
     return `<div class="row">${badge}${onlyTag}
       <div class="bubble ${only ? "wolfnight" : ""}">${esc(ev.text)}</div></div>`;
   }
@@ -223,7 +233,7 @@ function renderMeBar() {
   const status = st.status === "running" ? `第${st.round}${st.phase === "night" ? "夜" : "天"}`
                : st.winner ? `${st.winner}胜` : "已停止";
   $("meBarText").innerHTML = me
-    ? `你是 <b>${me.seat}号</b> <span class="role r-${me.role}">${me.role}</span>
+    ? `${avatar(me.role, "ava sm")}你是 <b>${me.seat}号</b> <span class="role r-${me.role}">${me.role}</span>
        ${me.alive ? "" : "（已出局）"} · ${status}`
     : `模拟模式 · 上帝视角 · ${status}`;
   $("barStop").disabled = !running;
@@ -376,7 +386,7 @@ function narration(ev) {
     return { seat: ev.seat, text: ev.text.replace(/^[^：]*：/, "") };
   if (ev.kind === "phase")
     return { seat: JUDGE, text: ev.text.replace(/—/g, "").trim() };
-  if (ev.kind === "result")
+  if (ev.kind === "result" || ev.kind === "judge")
     return { seat: JUDGE, text: ev.text };
   if (ev.kind === "system" && ev.text.startsWith("存活玩家"))
     return { seat: JUDGE, text: ev.text };
@@ -499,7 +509,6 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
   const cfg = await (await fetch("/api/config")).json();
   $("modelSel").innerHTML = cfg.models
     .map((m) => `<option value="${m}"${m === cfg.model ? " selected" : ""}>${m}</option>`).join("");
-  $("modelNote").textContent = cfg.note;
   TTS.ok = !!cfg.tts;
   if (!TTS.ok) {
     $("ttsOn").disabled = true;

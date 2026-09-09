@@ -73,3 +73,7 @@
 2026-09-09T14:24:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
 2026-09-09T14:25:01Z ERR  error="unexpected EOF" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
 2026-09-09T14:25:01Z ERR Request failed error="unexpected EOF" connIndex=1 dest=https://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T14:29:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"
+2026-09-09T14:31:51Z ERR  error="stream 869 canceled by remote with error code 0" connIndex=1 event=1 ingressRule=0 originService=http://localhost:8130
+2026-09-09T14:31:51Z ERR Request failed error="stream 869 canceled by remote with error code 0" connIndex=1 dest=https://uhwoo.com/api/stream event=0 ip=198.41.200.53 type=http
+2026-09-09T14:34:14Z ERR Failed to refresh DNS local resolver error="ParseAddr(\"\"): unable to parse IP"

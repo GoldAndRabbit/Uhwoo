@@ -11,18 +11,15 @@ body{
 }
 button{font:inherit;cursor:pointer;}
 
-/* 顶部标签栏 */
-.tabbar{display:flex;align-items:stretch;height:34px;background:#ecebe7;border-bottom:1px solid var(--line);}
-.tab{display:flex;align-items:center;gap:6px;padding:0 16px;font-size:12px;color:var(--dim);
      border-right:1px solid var(--line);}
 .tab.active{background:var(--panel);color:var(--text);}
 .tab-badge{background:#e5e2db;border-radius:8px;padding:0 6px;font-size:11px;}
 .tab-fill{flex:1;}
 .tab-note{display:flex;align-items:center;padding:0 14px;font-size:11px;color:var(--dim);}
 
-.app{display:grid;grid-template-columns:268px 400px 1fr;height:calc(100vh - 34px);}
+.app{display:grid;grid-template-columns:268px 400px 1fr;height:100vh;}
 /* iOS Safari 的 100vh 含地址栏高度，会把内容顶到可视区外面，用 dvh 修正 */
-@supports (height: 100dvh){ .app{height:calc(100dvh - 34px);} }
+@supports (height: 100dvh){ .app{height:100dvh;} }
 .col{overflow-y:auto;min-width:0;}
 .col::-webkit-scrollbar{width:8px;} .col::-webkit-scrollbar-thumb{background:#d8d4cc;border-radius:4px;}
 
@@ -56,6 +53,15 @@ button{font:inherit;cursor:pointer;}
 .r-守卫{background:var(--guard-bg);color:var(--guard-fg);}
 .r-平民{background:var(--vill-bg);color:var(--vill-fg);}
 .judge{background:#e8e4f0;color:#4b3f6b;}
+.bubble.judgeline{background:#f4f2f8;color:#4b3f6b;}
+.ava{width:52px;height:52px;border-radius:11px;object-fit:cover;flex:0 0 auto;
+     background:#efece6;border:1px solid var(--line);}
+.ava.sm{width:26px;height:26px;border-radius:7px;margin-top:1px;}
+/* 头像在上、号码身份在下，竖着一列 */
+.who{display:flex;flex-direction:column;align-items:center;gap:4px;flex:0 0 auto;}
+.who .badge{white-space:nowrap;}
+.prow .ava{width:34px;height:34px;border-radius:9px;}
+.ava.blank{display:inline-block;border-style:dashed;}
 .history .hrow{display:flex;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;
                margin-bottom:6px;background:#fcfbf9;cursor:pointer;font-size:12px;}
 .history .hrow:hover{background:#f4f2ee;}
@@ -127,6 +133,7 @@ details[open] summary::before{content:"▾ ";}
        background:var(--panel);border-bottom:1px solid var(--line);padding:9px 0;font-size:12.5px;}
 .mebar[hidden]{display:none;}
 .mebar b{font-size:13px;}
+.mebar .ava{margin-right:2px;}
 .mebar .role{border-radius:5px;padding:1px 7px;font-size:12px;}
 .mebar-btns{margin-left:auto;display:flex;gap:6px;}
 .mebar-btns button{border:1px solid var(--line);background:var(--panel);border-radius:7px;
@@ -159,13 +166,10 @@ details[open] summary::before{content:"▾ ";}
 
 @media (max-width: 860px){
   body{font-size:14px;}
-  .tabbar{height:32px;}
-  .tab{padding:0 10px;font-size:11px;}
-  .tab-note{display:none;}
 
   /* 三栏改成一次只显示一栏，由 body[data-tab] 决定显示哪一栏 */
   .app{display:block;height:auto;}
-  .col{display:none;height:calc(100vh - 32px - 54px);overflow-y:auto;border-right:none;
+  .col{display:none;height:calc(100vh - 54px);overflow-y:auto;border-right:none;
        -webkit-overflow-scrolling:touch;}
   .ask{padding-bottom:14px;}
   body[data-tab="side"] .sidebar{display:block;}
@@ -207,6 +211,6 @@ details[open] summary::before{content:"▾ ";}
 
 @supports (height: 100dvh){
   @media (max-width: 860px){
-    .col{height:calc(100dvh - 32px - 54px);}
+    .col{height:calc(100dvh - 54px);}
   }
 }
