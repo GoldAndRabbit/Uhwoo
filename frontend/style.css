@@ -119,6 +119,18 @@ details[open] summary::before{content:"▾ ";}
 .runbar.done .dots{display:none;}
 .empty{color:#b3ada2;font-size:12px;padding:24px 0;}
 
+/* ---------- 事件流顶栏：身份 + 停止/重开 ---------- */
+.mebar{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:8px;
+       background:var(--panel);border-bottom:1px solid var(--line);padding:9px 0;font-size:12.5px;}
+.mebar[hidden]{display:none;}
+.mebar b{font-size:13px;}
+.mebar .role{border-radius:5px;padding:1px 7px;font-size:12px;}
+.mebar-btns{margin-left:auto;display:flex;gap:6px;}
+.mebar-btns button{border:1px solid var(--line);background:var(--panel);border-radius:7px;
+                   padding:5px 12px;color:var(--text);font-size:12px;}
+.mebar-btns button:disabled{color:#bbb6ad;}
+#barStop{color:#a33b2c;}
+
 /* ---------- 游玩模式 ---------- */
 .me{background:#f1f5f0;border:1px solid #cfe0d2;border-radius:8px;padding:8px 10px;margin-bottom:10px;
     font-size:12px;color:#33553c;}

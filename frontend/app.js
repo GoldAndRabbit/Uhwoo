@@ -188,6 +188,7 @@ function tickRun() {
 
 /* ---------------- 事件流 ---------------- */
 function renderAll() {
+  renderMeBar();
   renderPlayers();
   renderCalls();
   renderLog();
@@ -210,7 +211,7 @@ function connect() {
       renderAsk(S.state.pending);        // 刷新页面时如果正轮到你，把问题接回来
       renderAll(); return;
     }
-    if (msg.state) S.state = msg.state;
+    if (msg.state) { S.state = msg.state; renderMeBar(); }
     if (msg.type === "event") {
       S.events.push(msg.data);
       if (msg.data.kind === "speech")
@@ -232,6 +233,24 @@ function connect() {
   S.es.onerror = () => { /* 浏览器会自动重连 */ };
 }
 
+/* ---------------- 事件流顶栏：身份 + 停止/重开 ---------------- */
+function renderMeBar() {
+  const st = S.state;
+  const bar = $("meBar");
+  if (!st) { bar.hidden = true; return; }
+  bar.hidden = false;
+  const running = st.status === "running" && !S.readonly;
+  const me = st.human ? st.players.find((p) => p.seat === st.human) : null;
+  const status = st.status === "running" ? `第${st.round}${st.phase === "night" ? "夜" : "天"}`
+               : st.winner ? `${st.winner}胜` : "已停止";
+  $("meBarText").innerHTML = me
+    ? `你是 <b>${me.seat}号</b> <span class="role r-${me.role}">${me.role}</span>
+       ${me.alive ? "" : "（已出局）"} · ${status}`
+    : `模拟模式 · 上帝视角 · ${status}`;
+  $("barStop").disabled = !running;
+  $("barNew").disabled = running;
+}
+
 /* ---------------- 游玩模式：轮到你 ---------------- */
 let askTimer = null;
 
@@ -239,7 +258,8 @@ function renderAsk(p) {
   const box = $("ask");
   if (!p) { box.hidden = true; clearInterval(askTimer); return; }
   box.hidden = false;
-  $("askTitle").textContent = p.title + "　轮到你";
+  const meRole = roleOf(p.seat);
+  $("askTitle").textContent = `${p.title}　轮到你${meRole ? "（你是 " + meRole + "）" : ""}`;
   const q = `<div class="ask-q">${esc(p.instruction)}</div>`;
 
   if (p.field === "speech") {
@@ -387,9 +407,11 @@ function stopSpeaking() {
 }
 
 /* ---------------- 交互 ---------------- */
-$("btnStart").addEventListener("click", async () => {
+// 左栏的「开一局/停止」和事件流顶栏的「重开/停止」是同一套逻辑
+async function startGame() {
   unlockAudio();                                   // 必须在 await 之前，手势才有效
   $("btnStart").disabled = true;
+  $("barNew").disabled = true;
   S.readonly = false;
   stopSpeaking();
   TTS.on = TTS.ok && $("ttsOn").checked;          // 以点开一局这一刻的勾选为准
@@ -397,21 +419,32 @@ $("btnStart").addEventListener("click", async () => {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: $("modelSel").value, tts: TTS.on, mode: $("modeSel").value }),
   });
-  if (!r.ok) { alert((await r.json()).detail); $("btnStart").disabled = false; return; }
+  if (!r.ok) {
+    alert((await r.json()).detail);
+    $("btnStart").disabled = false;
+    renderMeBar();
+    return;
+  }
   const d = await r.json();
   S.state = d.state; S.events = []; S.calls = []; S.filter = null;
   renderAsk(null);
   renderAll();
   connect();
   if (isMobile()) setTab("log");            // 手机上开局后直接看事件流
-});
+}
 
-$("btnStop").addEventListener("click", async () => {
+async function stopGame() {
   $("btnStop").disabled = true;
+  $("barStop").disabled = true;
   renderAsk(null);
   stopSpeaking();
   await fetch("/api/stop", { method: "POST" });
-});
+}
+
+$("btnStart").addEventListener("click", startGame);
+$("btnStop").addEventListener("click", stopGame);
+$("barNew").addEventListener("click", startGame);
+$("barStop").addEventListener("click", stopGame);
 
 $("ttsOn").addEventListener("change", (e) => {
   if (e.target.checked) unlockAudio();
@@ -431,7 +464,7 @@ $("log").addEventListener("click", (e) => {
   speak(Number(b.dataset.seat), b.dataset.text);
 });
 
-$("btnNew").addEventListener("click", () => $("btnStart").click());
+$("btnNew").addEventListener("click", startGame);
 $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayers(); renderCalls(); });
 
 (async function init() {

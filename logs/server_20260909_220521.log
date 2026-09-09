@@ -1,0 +1,37 @@
+INFO:     Started server process [55877]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8130 (Press CTRL+C to quit)
+INFO:     127.0.0.1:56551 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56570 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56570 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56570 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56570 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56584 - "POST /api/start HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56602 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56570 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56606 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56612 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56663 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56664 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56665 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56670 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56675 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56680 - "GET /api/snapshot HTTP/1.1" 200 OK
+chat 失败 (RemoteProtocolError)，0.6s 后第 2/4 次重试
+INFO:     127.0.0.1:56687 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56693 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56703 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56709 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56710 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56716 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56722 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56745 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56746 - "GET /static/app.js?v=1788962719 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56745 - "GET /static/style.css?v=1788962674 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56745 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56745 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56746 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56746 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56745 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56782 - "POST /api/stop HTTP/1.1" 200 OK
