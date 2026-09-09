@@ -74,7 +74,7 @@ async def start(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
 
 @app.post("/api/answer")
 async def answer(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
-    """游玩模式下把你的选择/发言交上去。"""
+    """单人模式下把你的选择/发言交上去。"""
     if not _game or _game.status != "running":
         raise HTTPException(409, "没有进行中的对局")
     if not _game.pending:

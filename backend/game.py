@@ -57,7 +57,7 @@ class Game:
         self.claimed_seer: int | None = None
         self.suspicion: dict[int, float] = {p.seat: 0.0 for p in self.players}
 
-        # 游玩模式：坐一个座位，其余 5 个交给模型。视野严格按这个座位裁。
+        # 单人模式：坐一个座位，其余 5 个交给模型。视野严格按这个座位裁。
         # 指定了身份就从该身份的座位里挑一个（2 狼 2 民各有两个位置），否则随机坐。
         self.human: int | None = None
         if self.mode == "play":
@@ -160,11 +160,11 @@ class Game:
         return self._emit("judge", text)
 
     def _visible(self, ev: Event) -> bool:
-        """模拟模式是上帝视角，全看得到；游玩模式只推你这个座位看得到的。"""
+        """模拟模式是上帝视角，全看得到；单人模式只推你这个座位看得到的。"""
         return self.human is None or ev.visible_to(self.human)
 
     def _call_visible(self, c: LLMCall) -> bool:
-        """游玩模式下别人的上下文和系统结算（含全部身份）都不能推给你。"""
+        """单人模式下别人的上下文和系统结算（含全部身份）都不能推给你。"""
         return self.human is None or c.seat == self.human
 
     def _record(self, call: LLMCall) -> None:
@@ -291,7 +291,7 @@ class Game:
     # ---------- 对局主流程 ----------
     def state(self) -> dict[str, Any]:
         reveal = self.status in ("finished", "stopped")
-        show_roles = reveal or self.human is None      # 游玩模式没结束前只能看到自己的身份
+        show_roles = reveal or self.human is None      # 单人模式没结束前只能看到自己的身份
         return {
             "gid": self.gid,
             "status": self.status,
@@ -520,7 +520,7 @@ class Game:
 
     # ---------- 存档 ----------
     def to_json(self, filtered: bool = False) -> dict[str, Any]:
-        """filtered=True 给前端用：游玩模式下裁掉你看不到的事件和别人的上下文。
+        """filtered=True 给前端用：单人模式下裁掉你看不到的事件和别人的上下文。
         存档始终存完整的上帝视角，复盘时才看得到狼队夜里聊了什么。"""
         events = self.events
         calls = self.calls

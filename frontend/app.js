@@ -18,7 +18,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<"
 const roleOf = (seat) => S.state?.players?.find((p) => p.seat === seat)?.role || "";
 const isPlay = () => S.state?.mode === "play";
 
-// 身份头像。游玩模式下别人的 role 是 null，自然就不会有头像，逻辑不用另写
+// 身份头像。单人模式下别人的 role 是 null，自然就不会有头像，逻辑不用另写
 const ROLE_IMG = { "守卫": "guard", "平民": "villager", "狼人": "wolf", "预言家": "seer" };
 const avatar = (role, cls = "ava") =>
   ROLE_IMG[role] ? `<img class="${cls}" src="/static/img/roles/${ROLE_IMG[role]}.png" alt="${role}">` : "";
@@ -105,7 +105,7 @@ function renderCalls() {
 
   if (!list.length) {
     box.innerHTML = isPlay()
-      ? `<div class="empty">游玩模式下这里只显示你自己的回合，别人的上下文不给你看。</div>`
+      ? `<div class="empty">单人模式下这里只显示你自己的回合，别人的上下文不给你看。</div>`
       : `<div class="empty">还没有调用。点「开一局」开始。</div>`;
     return;
   }
@@ -240,7 +240,7 @@ function renderMeBar() {
   $("barNew").disabled = running;
 }
 
-/* ---------------- 游玩模式：轮到你 ---------------- */
+/* ---------------- 单人模式：轮到你 ---------------- */
 let askTimer = null;
 
 function renderAsk(p) {
@@ -390,7 +390,7 @@ function narration(ev) {
     return { seat: JUDGE, text: ev.text };
   if (ev.kind === "system" && ev.text.startsWith("存活玩家"))
     return { seat: JUDGE, text: ev.text };
-  if (ev.kind === "night_action" && isPlay())        // 游玩模式下这些是你自己的私密信息
+  if (ev.kind === "night_action" && isPlay())        // 单人模式下这些是你自己的私密信息
     return { seat: JUDGE, text: ev.text };
   return null;
 }
@@ -482,7 +482,7 @@ async function stopGame() {
   await fetch("/api/stop", { method: "POST" });
 }
 
-function syncModeUI() {                       // 身份只在游玩模式下用得上
+function syncModeUI() {                       // 身份只在单人模式下用得上
   $("roleField").hidden = $("modeSel").value !== "play";
 }
 $("modeSel").addEventListener("change", syncModeUI);

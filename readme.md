@@ -60,7 +60,7 @@ LLM transport 从 `pitchasso/llm_api` 移植过来：OpenAI 兼容的 `/v1/chat/
 
 - **模拟模式**（默认）—— 6 个 agent 自己打，你是上帝视角：狼队夜里的商议、预言家的查验、
   每个 agent 吃进去的上下文和吐出来的 JSON，全都看得到。
-- **游玩模式** —— 随机给你一个座位，其余 5 个交给模型。视野严格按这个座位裁：
+- **单人模式** —— 随机给你一个座位，其余 5 个交给模型。视野严格按这个座位裁：
   只有公开发言、投票、死讯，加上你自己的身份和技能信息（你是狼就看得到狼队商议，
   是预言家就看得到自己的查验结果）。中栏不再显示别人的上下文，左栏别人的身份是 `?`。
   轮到你时右栏底部弹出作答面板：发言是输入框，守护/查验/刀人/投票是座位按钮，
@@ -112,7 +112,7 @@ CLOUDFLARED_TUNNEL_UHWOO_TOKEN=eyJ...
 ```
 backend/
   main.py      FastAPI：/api/start /api/stop /api/answer /api/stream(SSE) /api/snapshot /api/history
-  game.py      对局引擎：夜晚 → 白天 → 投票 → 胜负，逐条广播事件；游玩模式在这里等你回答
+  game.py      对局引擎：夜晚 → 白天 → 投票 → 胜负，逐条广播事件；单人模式在这里等你回答
   model.py     Role / Player / Event(audience) / LLMCall
   prompts.py   常驻的规则与身份 + 每一步的指令和 JSON schema
   llm.py       调用层：真实模型 + mock 启发式大脑 + JSON 提取
