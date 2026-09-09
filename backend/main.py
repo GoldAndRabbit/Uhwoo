@@ -7,12 +7,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import Body, FastAPI, HTTPException
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import tts
 from .game import DATA_DIR, Game
-from .llm import has_credentials, model_name
+from .llm import has_credentials
 from .llm_api import load_config
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
@@ -34,18 +35,24 @@ async def config() -> dict[str, Any]:
     return {
         "use_api": ok,
         "provider": cfg.provider,
-        "model": f"{cfg.provider} / {cfg.model}" if ok
-                 else "mock（未检测到 ALIYUN_BAILIAN_API_KEY，用本地启发式规则演示）",
+        "model": cfg.model,
+        "models": list(cfg.models),
+        "note": f"{cfg.provider}" if ok else "mock（未检测到 ALIYUN_BAILIAN_API_KEY）",
+        "tts": tts.available(),
     }
 
 
 @app.post("/api/start")
-async def start() -> dict[str, Any]:
+async def start(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     global _game, _task
     if _game and _game.status == "running":
         raise HTTPException(409, "已有对局在进行中")
+    cfg = load_config()
+    model = body.get("model") or cfg.model
+    if model not in cfg.models:
+        raise HTTPException(400, f"未知模型 {model}")
     gid = time.strftime("%Y%m%d%H%M%S")
-    _game = Game(gid)
+    _game = Game(gid, model=model, tts=bool(body.get("tts")))
     _task = asyncio.create_task(_game.run())
     return {"gid": gid, "state": _game.state()}
 
@@ -87,6 +94,23 @@ async def history_one(gid: str) -> dict[str, Any]:
     if not f.exists():
         raise HTTPException(404, "没有这局记录")
     return json.loads(f.read_text(encoding="utf-8"))
+
+
+@app.post("/api/tts")
+async def speak(body: dict[str, Any] = Body(...)) -> Response:
+    """把一句发言合成成 mp3。结果按文本落盘缓存，重复播放不再花钱。"""
+    text = str(body.get("text", "")).strip()
+    if not text:
+        raise HTTPException(400, "缺少 text")
+    if not tts.available():
+        raise HTTPException(503, "TTS 未启用（缺 DASHSCOPE_API_KEY / ALIYUN_BAILIAN_API_KEY 或未装 dashscope）")
+    seat = body.get("seat")
+    try:
+        audio = await tts.synthesize(text[:400], int(seat) if seat is not None else None)
+    except Exception as exc:
+        raise HTTPException(502, f"合成失败：{type(exc).__name__}: {exc}") from exc
+    return Response(audio, media_type="audio/mpeg",
+                    headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/api/stream")

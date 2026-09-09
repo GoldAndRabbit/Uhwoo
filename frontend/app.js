@@ -137,7 +137,8 @@ function rowHTML(ev) {
     const seat = ev.seat, role = roleOf(seat);
     const body = ev.text.replace(/^[^：]*：/, "");
     return `<div class="row"><span class="badge r-${role}">${seat}号 ${role}</span>
-      <div class="bubble">${esc(body)}</div></div>`;
+      <div class="bubble say" data-seat="${seat}" data-text="${esc(body)}"
+           title="点一下重听">${esc(body)}</div></div>`;
   }
   if (ev.kind === "vote")
     return `<div class="row">${onlyTag}<div class="bubble plain vote">${esc(ev.text)}</div></div>`;
@@ -188,11 +189,16 @@ function connect() {
     if (msg.type === "idle") return;
     if (msg.type === "snapshot") {
       S.state = msg.data.state; S.events = msg.data.events; S.calls = msg.data.calls;
+      if (TTS.ok && S.state.status === "running") {
+        TTS.on = !!S.state.tts && $("ttsOn").checked;
+      }
       renderAll(); return;
     }
     if (msg.state) S.state = msg.state;
     if (msg.type === "event") {
       S.events.push(msg.data);
+      if (msg.data.kind === "speech")
+        speak(msg.data.seat, msg.data.text.replace(/^[^：]*：/, ""));
       renderLog();
       $("log").parentElement.scrollTop = $("log").parentElement.scrollHeight;
     } else if (msg.type === "call") {
@@ -207,11 +213,60 @@ function connect() {
   S.es.onerror = () => { /* 浏览器会自动重连 */ };
 }
 
+/* ---------------- 朗读 ---------------- */
+const TTS = { on: false, ok: false, q: [], playing: false, audio: new Audio(), urls: new Map() };
+
+async function audioURL(seat, text) {
+  const key = seat + "|" + text;
+  if (TTS.urls.has(key)) return TTS.urls.get(key);
+  const p = fetch("/api/tts", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ seat, text }),
+  }).then(async (r) => {
+    if (!r.ok) throw new Error((await r.json()).detail || r.status);
+    return URL.createObjectURL(await r.blob());
+  });
+  TTS.urls.set(key, p);
+  return p;
+}
+
+function speak(seat, text) {
+  if (!TTS.on || !TTS.ok || !text) return;
+  TTS.q.push({ seat, text });
+  pump();
+}
+
+async function pump() {
+  if (TTS.playing || !TTS.q.length) return;
+  TTS.playing = true;
+  const { seat, text } = TTS.q.shift();
+  if (TTS.q.length) audioURL(TTS.q[0].seat, TTS.q[0].text).catch(() => {});  // 预取下一句
+  try {
+    TTS.audio.src = await audioURL(seat, text);
+    await TTS.audio.play();
+    await new Promise((res) => { TTS.audio.onended = res; TTS.audio.onerror = res; });
+  } catch (e) { /* 合成或播放失败就跳过这句 */ }
+  TTS.playing = false;
+  pump();
+}
+
+function stopSpeaking() {
+  TTS.q.length = 0;
+  TTS.audio.pause();
+  TTS.audio.currentTime = 0;
+  TTS.playing = false;
+}
+
 /* ---------------- 交互 ---------------- */
 $("btnStart").addEventListener("click", async () => {
   $("btnStart").disabled = true;
   S.readonly = false;
-  const r = await fetch("/api/start", { method: "POST" });
+  stopSpeaking();
+  TTS.on = TTS.ok && $("ttsOn").checked;          // 以点开一局这一刻的勾选为准
+  const r = await fetch("/api/start", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: $("modelSel").value, tts: TTS.on }),
+  });
   if (!r.ok) { alert((await r.json()).detail); $("btnStart").disabled = false; return; }
   const d = await r.json();
   S.state = d.state; S.events = []; S.calls = []; S.filter = null;
@@ -221,7 +276,24 @@ $("btnStart").addEventListener("click", async () => {
 
 $("btnStop").addEventListener("click", async () => {
   $("btnStop").disabled = true;
+  stopSpeaking();
   await fetch("/api/stop", { method: "POST" });
+});
+
+$("ttsOn").addEventListener("change", (e) => {
+  TTS.on = TTS.ok && e.target.checked;
+  try { localStorage.setItem("ww_tts", TTS.on ? "1" : "0"); } catch (_) {}
+  if (!TTS.on) stopSpeaking();                    // 中途取消勾选就立刻闭麦
+});
+
+// 点发言气泡可以重听这一句
+$("log").addEventListener("click", (e) => {
+  const b = e.target.closest(".bubble.say");
+  if (!b || !TTS.ok) return;
+  stopSpeaking();
+  TTS.on = true;
+  $("ttsOn").checked = true;
+  speak(Number(b.dataset.seat), b.dataset.text);
 });
 
 $("btnNew").addEventListener("click", () => $("btnStart").click());
@@ -229,7 +301,19 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
 
 (async function init() {
   const cfg = await (await fetch("/api/config")).json();
-  $("modelNote").textContent = (cfg.use_api ? "模型：" : "") + cfg.model;
+  $("modelSel").innerHTML = cfg.models
+    .map((m) => `<option value="${m}"${m === cfg.model ? " selected" : ""}>${m}</option>`).join("");
+  $("modelNote").textContent = cfg.note;
+  TTS.ok = !!cfg.tts;
+  if (!TTS.ok) {
+    $("ttsOn").disabled = true;
+    $("ttsOn").parentElement.title = "未配置 DASHSCOPE_API_KEY / ALIYUN_BAILIAN_API_KEY";
+  } else {
+    let want = false;
+    try { want = localStorage.getItem("ww_tts") === "1"; } catch (_) {}
+    $("ttsOn").checked = want;
+    TTS.on = want;
+  }
   const snap = await (await fetch("/api/snapshot")).json();
   if (!snap.empty) {
     S.state = snap.state; S.events = snap.events; S.calls = snap.calls;

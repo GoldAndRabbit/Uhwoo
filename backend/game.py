@@ -8,9 +8,10 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from . import prompts
+from . import tts as tts_mod
 from .llm import LLMClient
 from .model import SETUP, Event, LLMCall, Player, Role
-from . import prompts
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -20,11 +21,13 @@ class GameStopped(Exception):
 
 
 class Game:
-    def __init__(self, gid: str, seed: int | None = None, use_api: bool | None = None):
+    def __init__(self, gid: str, seed: int | None = None, use_api: bool | None = None,
+                 model: str | None = None, tts: bool = False):
         self.gid = gid
+        self.tts = bool(tts) and tts_mod.available()
         self.seed = seed if seed is not None else random.randrange(10**6)
         self.rng = random.Random(self.seed)
-        self.llm = LLMClient(use_api=use_api, seed=self.seed)
+        self.llm = LLMClient(use_api=use_api, seed=self.seed, model=model)
 
         roles = SETUP[:]
         self.rng.shuffle(roles)
@@ -90,8 +93,22 @@ class Game:
         ev = Event(kind=kind, text=text, audience=audience, seat=seat,
                    round=self.round, phase=self.phase, meta={"stream": stream, **meta})
         self.events.append(ev)
+        if self.tts and kind == "speech":
+            self._warm_tts(ev)
         self._push({"type": "event", "data": ev.to_json(), "state": self.state()})
         return ev
+
+    def _warm_tts(self, ev: Event) -> None:
+        """发言一出来就先去合成，等前端来取的时候基本已经在缓存里了。"""
+        text = ev.text.split("：", 1)[-1]
+
+        async def go() -> None:
+            try:
+                await tts_mod.synthesize(text[:400], ev.seat)
+            except Exception:
+                pass
+
+        asyncio.get_running_loop().create_task(go())
 
     def _record(self, call: LLMCall) -> None:
         self.calls.append(call)
@@ -176,6 +193,7 @@ class Game:
             "winner": self.winner,
             "seed": self.seed,
             "model": self.llm.model,
+            "tts": self.tts,
             "reveal": reveal,
             "alive": self.alive,
             "calls": len(self.calls),

@@ -10,7 +10,7 @@ from .game import Game
 
 async def _run(args: argparse.Namespace) -> None:
     g = Game(time.strftime("%Y%m%d%H%M%S"), seed=args.seed,
-             use_api=False if args.mock else None)
+             use_api=False if args.mock else None, model=args.model)
     print(f"[model] {g.llm.model}  [seed] {g.seed}")
     t0 = time.time()
     await g.run()
@@ -24,6 +24,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(prog="backend.cli")
     ap.add_argument("--mock", action="store_true", help="不调模型，用本地启发式大脑")
     ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--model", default=None, help="覆盖默认模型，如 qwen3.8-flash")
     asyncio.run(_run(ap.parse_args()))
 
 

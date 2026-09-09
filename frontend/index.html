@@ -17,12 +17,10 @@
 <div class="app">
   <!-- 左栏 -->
   <aside class="col sidebar">
-    <p class="blurb">每个 agent 各有各的视野：全局一条事件流，每条带 audience，谁看得到谁看不到由它决定。</p>
-
-    <div class="start-card">
-      <div class="start-title">开一局</div>
-      <div class="start-desc">约 30~40 次模型调用、两三分钟。狼队夜里的商议和预言家的查验都看得到。</div>
-    </div>
+    <label class="field">模型
+      <select id="modelSel"></select>
+    </label>
+    <label class="check"><input type="checkbox" id="ttsOn"> 朗读发言</label>
     <button id="btnStart" class="btn primary">开一局</button>
     <button id="btnStop" class="btn ghost" disabled>停止这一局</button>
 

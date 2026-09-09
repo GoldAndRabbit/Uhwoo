@@ -16,12 +16,29 @@ siliconflow:
   base_url: https://api.siliconflow.cn/v1
   default_model: Qwen/Qwen3.6-35B-A3B
 
-# 狼人杀 agent 用哪一家、哪个模型。
+# 狼人杀 agent 用哪一家、哪个模型。models 是 UI 下拉框里的候选，model 是默认值。
 #   enable_thinking: 仅对 Qwen3 混合思考模型有意义。这里每次调用要的是一段 JSON，
 #                    模型自己的 thinking 字段已经承担了推理，关掉思考更快更便宜。
-#   一局约 30~40 次调用，flash 足够；想要更强的推理可以换 qwen3.8-max。
 werewolf:
   provider: aliyun
-  model: qwen3.8-flash
+  model: deepseek-v4-flash
+  models:
+    - deepseek-v4-flash
+    - qwen3.8-flash
   enable_thinking: false
   timeout: 90
+
+# 朗读白天的发言。鉴权用 DASHSCOPE_API_KEY，没有就退回 ALIYUN_BAILIAN_API_KEY。
+# 目前 qwen-audio-3.0-tts 只有 longanhuan_v3.6 一个音色，所以用音高/语速区分 6 个座位。
+tts:
+  enabled: true
+  model: qwen-audio-3.0-tts-flash
+  voice: longanhuan_v3.6
+  # websocket_url: wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference
+  seats:
+    1: {pitch_rate: 1.00, speech_rate: 1.05}
+    2: {pitch_rate: 0.88, speech_rate: 1.00}
+    3: {pitch_rate: 1.12, speech_rate: 1.10}
+    4: {pitch_rate: 0.94, speech_rate: 1.15}
+    5: {pitch_rate: 1.06, speech_rate: 0.98}
+    6: {pitch_rate: 0.82, speech_rate: 1.08}

@@ -1,0 +1,36 @@
+INFO:     Started server process [52290]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8130 (Press CTRL+C to quit)
+INFO:     127.0.0.1:62945 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62947 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62990 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63072 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63073 - "GET /static/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63072 - "GET /static/style.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63072 - "GET /api/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63072 - "GET /api/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63072 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63072 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62960 - "GET /api/stream HTTP/1.1" 200 OK

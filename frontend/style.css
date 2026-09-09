@@ -26,10 +26,11 @@ button{font:inherit;cursor:pointer;}
 
 /* ---------- 左栏 ---------- */
 .sidebar{background:var(--panel);border-right:1px solid var(--line);padding:14px 12px 30px;}
-.blurb{margin:0 0 12px;font-size:12px;color:var(--dim);line-height:1.7;}
-.start-card{background:#fbe9e7;border:1px solid #f0cfca;border-radius:8px;padding:10px 12px;margin-bottom:8px;}
-.start-title{font-weight:600;color:#a33b2c;margin-bottom:4px;}
-.start-desc{font-size:11.5px;color:#8b5b52;line-height:1.6;}
+.field{display:block;font-size:11.5px;color:var(--dim);margin-bottom:8px;}
+.field select{display:block;width:100%;margin-top:4px;padding:7px 8px;border:1px solid var(--line);
+              border-radius:8px;background:var(--panel);color:var(--text);font:inherit;}
+.check{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);margin:0 0 10px;cursor:pointer;}
+.check input{accent-color:#c0392b;}
 .btn{width:100%;border-radius:8px;padding:8px 10px;margin-bottom:8px;border:1px solid var(--line);
      background:var(--panel);color:var(--text);}
 .btn.primary{background:#c0392b;border-color:#c0392b;color:#fff;font-weight:600;}
@@ -96,6 +97,8 @@ details[open] summary::before{content:"▾ ";}
 .only{flex:0 0 auto;border:1px solid #e7c9c9;color:#a33b2c;background:#fdf3f2;border-radius:11px;
       padding:1px 9px;font-size:11px;white-space:nowrap;margin-top:2px;}
 .bubble{background:#f4f2ee;border-radius:10px;padding:7px 12px;max-width:860px;}
+.bubble.say{cursor:pointer;}
+.bubble.say:hover{background:#eeebe5;}
 .bubble.plain{background:#f8f7f4;color:#6b6558;font-size:12px;}
 .bubble.result{background:#f1f5f0;color:#33553c;}
 .bubble.wolfnight{background:#fdf3f2;}

@@ -76,6 +76,7 @@ class LlmConfig:
     provider: str
     base_url: str
     model: str
+    models: tuple[str, ...]
     enable_thinking: bool | None
     timeout: float
 
@@ -99,7 +100,10 @@ def load_config() -> LlmConfig:
     model = (os.environ.get("WEREWOLF_MODEL") or ww.get("model")
              or section.get("default_model") or DEFAULTS[provider]["default_model"])
     thinking = ww.get("enable_thinking")
-    return LlmConfig(provider=provider, base_url=base_url.rstrip("/"), model=model,
+    models = tuple(ww.get("models") or ()) or (model,)
+    if model not in models:
+        models = (model,) + models
+    return LlmConfig(provider=provider, base_url=base_url.rstrip("/"), model=model, models=models,
                      enable_thinking=None if thinking is None else bool(thinking),
                      timeout=float(ww.get("timeout", 120)))
 

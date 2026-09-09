@@ -59,10 +59,12 @@ def _extract_json(text: str) -> dict[str, Any] | None:
 class LLMClient:
     """kind: guard / wolf / seer / speech / vote。mock 模式下用启发式规则造出合理的中文输出。"""
 
-    def __init__(self, use_api: bool | None = None, seed: int | None = None):
+    def __init__(self, use_api: bool | None = None, seed: int | None = None,
+                 model: str | None = None):
         self.use_api = has_credentials() if use_api is None else use_api
         cfg = llm_api.load_config()
-        self.model = f"{cfg.provider}/{cfg.model}" if self.use_api else "mock"
+        self.model_id = model or cfg.model
+        self.model = f"{cfg.provider}/{self.model_id}" if self.use_api else "mock"
         self.rng = random.Random(seed)
         self._json_mode = True
 
@@ -99,11 +101,11 @@ class LLMClient:
         payload = [{"role": "system", "content": system}] + messages
         extra = {"response_format": {"type": "json_object"}} if self._json_mode else None
         try:
-            return await llm_api.chat_complete(payload, extra_payload=extra)
+            return await llm_api.chat_complete(payload, model=self.model_id, extra_payload=extra)
         except RuntimeError as exc:
             if self._json_mode and "response_format" in str(exc):
                 self._json_mode = False                   # 上游不支持就退回纯提示词约束
-                return await llm_api.chat_complete(payload)
+                return await llm_api.chat_complete(payload, model=self.model_id)
             raise
 
     # ---------- mock 大脑 ----------
