@@ -406,15 +406,17 @@ async function playLine(seat, text, eid = null) {
 
 // 这一条能不能念、用谁的声音念（手动点播放用这个，范围宽一些）
 function speakable(ev) {
+  // 只有两种声音：角色（发言、狼队夜里的商议）和法官（报幕、死讯、票型、你自己的私密信息）。
+  // 第N夜/第N天这种分隔线、存活玩家清单、逐条票型都不念 —— 法官那句已经把信息说全了。
   if (ev.kind === "speech")
     return { seat: ev.seat, text: ev.text.replace(/^[^：]*：/, "") };
-  if (ev.kind === "phase")
-    return { seat: JUDGE, text: ev.text.replace(/—/g, "").trim() };
-  if (ev.kind === "result" || ev.kind === "judge" || ev.kind === "night_action")
+  if (ev.kind === "result" || ev.kind === "judge")
     return { seat: JUDGE, text: ev.text };
-  if (ev.kind === "system" && ev.text.startsWith("存活玩家"))
-    return { seat: JUDGE, text: ev.text };
-  return null;                                       // 逐条票型太碎，不念
+  if (ev.kind === "night_action")
+    return ev.seat && ev.text.includes("：")         // 狼队商议是角色在说，用他自己的声音
+      ? { seat: ev.seat, text: ev.text.replace(/^[^：]*：/, "") }
+      : { seat: JUDGE, text: ev.text };
+  return null;
 }
 
 // 自动朗读只念叙事主线：发言 + 法官报幕。夜里的私密行动只在单人模式下念给你自己听

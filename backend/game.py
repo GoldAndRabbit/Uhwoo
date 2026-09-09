@@ -130,15 +130,13 @@ class Game:
         """这条事件要不要念、用谁的声音念 —— 和前端 narration() 保持一致。"""
         if ev.kind == "speech":
             return ev.seat, ev.text.split("：", 1)[-1]
-        if ev.kind == "phase":
-            return self.JUDGE_VOICE, ev.text.replace("—", "").strip()
         if ev.kind in ("result", "judge"):
             return self.JUDGE_VOICE, ev.text
-        if ev.kind == "system" and ev.text.startswith("存活玩家"):
-            return self.JUDGE_VOICE, ev.text
         if ev.kind == "night_action" and self.human is not None:
+            if ev.seat and "：" in ev.text:            # 狼队商议是角色在说
+                return ev.seat, ev.text.split("：", 1)[-1]
             return self.JUDGE_VOICE, ev.text
-        return None
+        return None                                   # 分隔线、存活清单、逐条票型都不念
 
     def _warm_tts(self, ev: Event) -> None:
         """事件一落地就先去合成，等前端来取的时候基本已经在缓存里了。"""
