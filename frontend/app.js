@@ -666,7 +666,7 @@ document.querySelectorAll(".mobnav button")
 // 念完这一条才放出下一条，包括「轮到你」的作答面板。不然语音还没读完
 // 下面的发言就全刷出来了，等于剧透。
 const TTS = { on: false, ok: false, audio: new Audio(), urls: new Map(),
-              unlocked: false, blocked: false, speaking: null, speakingId: null };
+              unlocked: false, unlocking: false, blocked: false, speaking: null, speakingId: null };
 TTS.audio.preload = "auto";
 TTS.audio.playsInline = true;
 
@@ -680,15 +680,29 @@ const SILENT_WAV = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAE
 function unlockAudio() {
   if (TTS.unlocked || !TTS.ok) return;
   try {
+    // unlocking 这个标记是关键：解锁用的静音 play() 是异步的，它 resolve 的时候
+    // 第一条语音往往已经换好 src 开播了 —— 那时候再 pause() 就把法官第一句按停了
+    // （反过来，静音的 play() 被新 src 打断而 reject，也会被误判成「浏览器拦了」）。
+    // 所以回调里先看这面旗子还在不在：playLine 一接管就把它放倒。
+    TTS.unlocking = true;
     TTS.audio.src = SILENT_WAV;
     const p = TTS.audio.play();
     if (p && p.then) {
-      p.then(() => { TTS.audio.pause(); TTS.unlocked = true; TTS.blocked = false; })
-       .catch(() => { TTS.blocked = true; });
+      p.then(() => {
+        TTS.unlocked = true;
+        TTS.blocked = false;
+        if (TTS.unlocking) TTS.audio.pause();       // 还没人接管才需要收尾
+      }).catch(() => {
+        if (TTS.unlocking) TTS.blocked = true;
+      }).finally(() => { TTS.unlocking = false; });
     } else {
       TTS.unlocked = true;
+      TTS.unlocking = false;
     }
-  } catch (e) { TTS.blocked = true; }
+  } catch (e) {
+    TTS.unlocking = false;
+    TTS.blocked = true;
+  }
 }
 
 // 万一解锁没赶上（比如刷新页面接上正在跑的一局），下一次点页面任意处补一次
@@ -788,7 +802,9 @@ function markPlaying(eid) {
 async function playLine(seat, text, eid = null, onStart = null) {
   markPlaying(eid);
   try {
-    TTS.audio.src = await audioURL(seat, text);
+    const src = await audioURL(seat, text);
+    TTS.unlocking = false;              // 从这里开始这个 audio 归我，解锁的收尾别再动它
+    TTS.audio.src = src;
     await TTS.audio.play();
     TTS.blocked = false;
     markSpeaking(seat, eid);           // 等 play() 真的开始了再亮，免得被自动播放策略拦下还挂在那
