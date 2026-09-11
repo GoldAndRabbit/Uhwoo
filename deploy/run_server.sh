@@ -4,6 +4,12 @@ set -e
 REPO="$(cd "$(dirname "$0")/.." && pwd)"; cd "$REPO"
 set +u; [[ -f "$HOME/.zshrc" ]] && source "$HOME/.zshrc"; set -u   # 取 ALIYUN_BAILIAN_API_KEY 等
 
+# 依赖有变动时补一下（uv 全命中缓存时不到 1 秒）
+if command -v uv >/dev/null 2>&1; then
+  [ -d .venv ] || uv venv --python 3.12 .venv
+  VIRTUAL_ENV="$PWD/.venv" uv pip install -q -r requirements.txt
+fi
+
 PORT="${PORT:-8130}"
 LOG_DIR="$REPO/logs"; mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/server_$(date +%Y%m%d_%H%M%S).log"
