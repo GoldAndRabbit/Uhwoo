@@ -3,3 +3,4 @@ uvicorn[standard]==0.34.0
 httpx>=0.27
 pyyaml>=6.0
 dashscope>=1.27        # 语音合成 + 声音复刻
+pillow>=10             # 只在生图去背/缩图时用到

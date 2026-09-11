@@ -19,6 +19,10 @@ class Role(str, Enum):
         return "狼人阵营" if self is Role.WOLF else "好人阵营"
 
 
+# 座位头像：frontend/img/avatars/<key>.png，6 女 6 男，由 scripts/gen_avatars.py 生成。
+# 一局只用得上 6 张，开局时随机抽（见 Game.avatars）。
+AVATARS: list[str] = [f"f{i}" for i in range(1, 7)] + [f"m{i}" for i in range(1, 7)]
+
 # 6 人局：2 狼 2 民 1 预言家 1 守卫
 SETUP: list[Role] = [Role.WOLF, Role.WOLF, Role.VILLAGER, Role.VILLAGER, Role.SEER, Role.GUARD]
 

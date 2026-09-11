@@ -2,6 +2,7 @@
 
 - 鉴权：DASHSCOPE_API_KEY，没有就退回 ALIYUN_BAILIAN_API_KEY（同一把百炼 key）
 - 配置：config/llm_api.yaml 的 tts 段（model / voice / 每个座位的音高语速）
+- 念之前先把阿拉伯数字改写成中文数字：「第2夜」交给模型会念成「第两夜」
 - 合成结果按 sha1(model|voice|seat|text) 落盘 data/tts/，重复播放不再花钱
 - SDK 是同步的，统一用 asyncio.to_thread 包一层，别卡住事件循环
 """
@@ -11,6 +12,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -32,6 +34,37 @@ DEFAULT_SEAT_STYLES: dict[int, dict[str, float]] = {
     5: {"pitch_rate": 1.06, "speech_rate": 0.98},
     6: {"pitch_rate": 0.82, "speech_rate": 1.08},
 }
+
+
+# 数字读法：模型把「第2夜」念成「第两夜」、「2号」念成「两号」，都不对。
+# 送进去之前自己把阿拉伯数字换成中文，一律用「二」不用「两」。
+_CN_DIGIT = "零一二三四五六七八九"
+
+
+def _cn_number(n: int) -> str:
+    """0–99 的常规读法：10→十、11→十一、20→二十、25→二十五。"""
+    if n < 10:
+        return _CN_DIGIT[n]
+    if n < 20:
+        return "十" + (_CN_DIGIT[n % 10] if n % 10 else "")
+    return _CN_DIGIT[n // 10] + "十" + (_CN_DIGIT[n % 10] if n % 10 else "")
+
+
+def normalize_digits(text: str) -> str:
+    """把文本里的阿拉伯数字换成中文读法。
+
+    1–2 位按数值读（2→二、15→十五），3 位以上逐位念（房间号 40317 → 四零三一七，
+    读成「四万零三百一十七」就没人听得懂了）。
+    """
+    out: list[str] = []
+    for chunk in re.split(r"(\d+)", text):
+        if not chunk.isdigit():
+            out.append(chunk)
+        elif len(chunk) <= 2 and not chunk.startswith("0"):
+            out.append(_cn_number(int(chunk)))
+        else:
+            out.append("".join(_CN_DIGIT[int(c)] for c in chunk))
+    return "".join(out)
 
 
 @dataclass(frozen=True)
@@ -137,7 +170,7 @@ _locks: dict[str, asyncio.Lock] = {}
 async def synthesize(text: str, seat: int | None = None, clone: bool | None = None) -> bytes:
     """合成一句话，命中磁盘缓存就直接返回。同一句并发请求只合成一次。"""
     cfg = load_tts_config()
-    text = text.strip()
+    text = normalize_digits(text.strip())
     if not text:
         raise ValueError("空文本")
     if clone is None:

@@ -18,6 +18,17 @@ from .game import Game
 MAX_HUMANS = 6
 ROOM_TTL = 6 * 3600          # 空置 6 小时就回收
 
+# 随机昵称：一个中文名 + 6 位数字。进多人模式时前端拿一个填进昵称框，
+# 不想起名的人可以直接用；数字后缀是为了同名的人在成员列表里也能分得开。
+SURNAMES = "赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜林徐高"
+GIVEN = ("子明 未央 秋白 清和 知远 听澜 云舒 望舒 星野 长风 拾一 见山 从心 一诺 安然 若初 "
+         "晚晴 时雨 南山 惊蛰 沉舟 寒枝 朝辞 慕青").split()
+
+
+def random_name() -> str:
+    """例：陈听澜 428310。名字最多 4 个字，加空格和 6 位数字正好卡在 12 字上限内。"""
+    return f"{random.choice(SURNAMES)}{random.choice(GIVEN)} {random.randint(0, 999999):06d}"
+
 
 @dataclass
 class Member:
@@ -50,7 +61,8 @@ class Room:
             raise ValueError("这局已经开始了，等下一局吧")
         if len(self.members) >= MAX_HUMANS:
             raise ValueError(f"房间满了（最多 {MAX_HUMANS} 人）")
-        m = Member(token=secrets.token_urlsafe(12), name=name.strip()[:12] or "玩家", host=host)
+        m = Member(token=secrets.token_urlsafe(12),
+                   name=name.strip()[:12] or random_name(), host=host)
         self.members[m.token] = m
         self.touch()
         return m

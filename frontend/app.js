@@ -16,12 +16,31 @@ const S = {
 const kchars = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const roleOf = (seat) => S.state?.players?.find((p) => p.seat === seat)?.role || "";
+const nameOf = (seat) => S.state?.names?.[String(seat)] || `${seat}号`;
 const isPlay = () => S.state?.mode === "play";
 
-// 身份头像。单人模式下别人的 role 是 null，自然就不会有头像，逻辑不用另写
-const ROLE_IMG = { "守卫": "guard", "平民": "villager", "狼人": "wolf", "预言家": "seer" };
-const avatar = (role, cls = "ava") =>
-  ROLE_IMG[role] ? `<img class="${cls}" src="/static/img/roles/${ROLE_IMG[role]}.png" alt="${role}">` : "";
+// 玩家头像：开局时后端从 12 张里随机抽 6 张发给 1–6 号（state.avatars）。
+// 事件流、左栏玩家、顶栏共用这一个，号码压在头像下半部当角标 —— 谁在说话一眼认得出，
+// 也省得每处都在旁边再挂一个「N号」的标签。
+const seatFace = (seat) => S.state?.avatars?.[String(seat)] || null;
+
+function face(seat, cls = "") {
+  const key = seatFace(seat);
+  const speaking = TTS.speaking === seat ? " speaking" : "";
+  const img = key
+    ? `<img src="/static/img/avatars/${key}.png" alt="${seat}号">`
+    : `<span class="face-blank"></span>`;   // 老存档没发过头像，留个占位别塌掉
+  return `<span class="face ${cls}${speaking}" data-seat="${seat}">${img}
+            <b class="face-no">${seat}<i>号</i></b></span>`;
+}
+
+// 朗读到谁，谁的头像就呼吸一下（左栏、事件流、顶栏是同一个 seat，一起亮）
+function markSpeaking(seat) {
+  TTS.speaking = seat || null;
+  document.querySelectorAll(".face").forEach((el) =>
+    el.classList.toggle("speaking", String(TTS.speaking) === el.dataset.seat));
+}
+
 const audienceLabel = (a) =>
   a === "all" ? null : "只有 " + a.map((s) => s + "号").join("、") + " 看得到";
 
@@ -38,8 +57,8 @@ function renderPlayers() {
     const tag = p.role ? `<span class="rtag r-${p.role}">${p.role}</span>`
                        : `<span class="rtag r-平民">?</span>`;
     return `<div class="prow${active}${dead}" data-seat="${p.seat}">
-      ${avatar(p.role) || '<span class="ava blank"></span>'}
-      <span class="pname">${p.seat}号</span>${tag}${me}
+      ${face(p.seat, "md")}
+      <span class="pname">${nameOf(p.seat)}</span>${tag}${me}
       <span class="pmeta">${meta}</span></div>`;
   });
   const sysActive = S.filter === "sys" ? " active" : "";
@@ -167,8 +186,8 @@ function rowHTML(ev) {
   if (ev.kind === "speech") {
     const seat = ev.seat, role = roleOf(seat);
     const body = ev.text.replace(/^[^：]*：/, "");
-    return `<div class="row"${rid}><div class="who">${avatar(role)}
-        <span class="badge r-${role || "平民"}">${seat}号${role ? " " + role : ""}</span></div>
+    return `<div class="row"${rid}><div class="who">${face(seat)}
+        ${role ? `<span class="badge r-${role}">${role}</span>` : ""}</div>
       <div class="bubble say">${esc(body)}</div>${playBtn(ev)}</div>`;
   }
   if (ev.kind === "vote")
@@ -182,8 +201,8 @@ function rowHTML(ev) {
   if (ev.kind === "night_action") {
     const role = ev.seat ? roleOf(ev.seat) : "";
     const badge = ev.seat
-      ? `<div class="who">${avatar(role)}
-           <span class="badge r-${role || "平民"}">${ev.seat}号${role ? " " + role : ""}</span></div>` : "";
+      ? `<div class="who">${face(ev.seat)}
+           ${role ? `<span class="badge r-${role}">${role}</span>` : ""}</div>` : "";
     return `<div class="row"${rid}>${badge}
       <div class="bubble ${only ? "wolfnight" : ""}">${esc(ev.text)}</div>${onlyTag}${playBtn(ev)}</div>`;
   }
@@ -339,7 +358,7 @@ function renderMeBar() {
   const status = st.status === "running" ? `第${st.round}${st.phase === "night" ? "夜" : "天"}`
                : st.winner ? `${st.winner}胜` : "已停止";
   $("meBarText").innerHTML = me
-    ? `${avatar(me.role, "ava sm")}你是 <b>${me.seat}号</b> <span class="role r-${me.role}">${me.role}</span>
+    ? `${face(me.seat, "sm")}你是 <b>${me.seat}号</b> <span class="role r-${me.role}">${me.role}</span>
        ${me.alive ? "" : "（已出局）"} · ${status}`
     : `模拟模式 · 上帝视角 · ${status}`;
   $("barStop").disabled = !running;
@@ -359,11 +378,15 @@ function renderAsk(p) {
   const q = `<div class="ask-q">${esc(p.instruction)}</div>`;
 
   if (p.field === "speech") {
+    const mic = REC.ok
+      ? `<button class="mic" id="askMic"><span class="dot"></span><span id="askMicTxt">🎤 语音输入</span></button>`
+      : "";
     $("askBody").innerHTML = q +
-      `<textarea id="askText" placeholder="说点什么，所有人都看得到…"></textarea>
-       <button class="send" id="askSend">发言</button>`;
+      `<textarea id="askText" placeholder="说点什么，或者点右边的麦克风说给它听…"></textarea>
+       <div class="ask-actions">${mic}<button class="send" id="askSend">发言</button></div>`;
     $("askSend").addEventListener("click", () =>
       submitAnswer({ speech: $("askText").value }));
+    if (REC.ok) $("askMic").addEventListener("click", micToggle);
     $("askText").focus();
   } else {
     const seats = (p.options || []).map((s) =>
@@ -409,6 +432,124 @@ async function submitAnswer(payload) {
   renderAsk(null);
 }
 
+/* ---------------- 语音输入 ---------------- */
+// 浏览器自带的 MediaRecorder 各家格式不一样（Chrome 是 webm/opus、Safari 是 mp4），
+// 上游 ASR 只认几种固定格式，所以自己在 AudioContext 里拿原始 PCM，
+// 降到 16k 单声道再编成 wav —— 服务端只需要认一种格式。
+const REC = { ok: false, on: false, busy: false, ctx: null, stream: null, node: null,
+              chunks: [], rate: 0, target: null };
+const REC_RATE = 16000;
+
+function downsample(chunks, from, to) {
+  const flat = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+  let at = 0;
+  for (const c of chunks) { flat.set(c, at); at += c.length; }
+  if (from <= to) return flat;
+  const ratio = from / to;
+  const out = new Float32Array(Math.floor(flat.length / ratio));
+  for (let i = 0; i < out.length; i++) {
+    // 取这一段的平均值而不是直接抽点：直接抽点会把高频折回来，听着发毛刺
+    const a = Math.floor(i * ratio), b = Math.min(flat.length, Math.floor((i + 1) * ratio));
+    let sum = 0;
+    for (let j = a; j < b; j++) sum += flat[j];
+    out[i] = b > a ? sum / (b - a) : 0;
+  }
+  return out;
+}
+
+function toWav(samples, rate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buf);
+  const str = (off, t) => { for (let i = 0; i < t.length; i++) view.setUint8(off + i, t.charCodeAt(i)); };
+  str(0, "RIFF"); view.setUint32(4, 36 + samples.length * 2, true); str(8, "WAVEfmt ");
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true);
+  view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  str(36, "data"); view.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) {
+    const v = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+  }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+async function recStart() {
+  REC.stream = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+  });
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  REC.ctx = new Ctx();
+  if (REC.ctx.state === "suspended") await REC.ctx.resume();
+  const src = REC.ctx.createMediaStreamSource(REC.stream);
+  const node = REC.ctx.createScriptProcessor(4096, 1, 1);
+  REC.chunks = [];
+  REC.rate = REC.ctx.sampleRate;
+  node.onaudioprocess = (e) => REC.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  src.connect(node);
+  node.connect(REC.ctx.destination);      // Safari 上不接到 destination 就不会回调
+  REC.node = node;
+  REC.on = true;
+}
+
+function recStop() {
+  REC.on = false;
+  try { REC.node.disconnect(); } catch (_) {}
+  try { REC.stream.getTracks().forEach((t) => t.stop()); } catch (_) {}
+  try { REC.ctx.close(); } catch (_) {}
+  const wav = toWav(downsample(REC.chunks, REC.rate, REC_RATE), REC_RATE);
+  REC.chunks = [];
+  return wav;
+}
+
+function micLabel(txt, cls) {
+  const btn = $("askMic");
+  if (!btn) return;
+  btn.className = "mic" + (cls ? " " + cls : "");
+  $("askMicTxt").textContent = txt;
+}
+
+// 点一下开始录，再点一下结束并识别 —— 比「按住说话」稳：移动端按住时
+// 手指一滑出按钮就收不到 pointerup，录音会一直挂着
+async function micToggle() {
+  const box = $("askText");
+  if (REC.busy) return;
+  if (!REC.on) {
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+      // http 下除了 localhost 一律没有 mediaDevices，这时候按钮点了得说清楚为什么
+      alert("这个页面拿不到麦克风：浏览器只在 https 或 localhost 下开放录音。");
+      return;
+    }
+    try {
+      await recStart();
+      micLabel("正在听，点一下结束", "rec");
+    } catch (e) {
+      alert("拿不到麦克风：" + (e && e.message ? e.message : e));
+    }
+    return;
+  }
+  const wav = recStop();
+  REC.busy = true;
+  micLabel("识别中…", "busy");
+  try {
+    const r = await fetch(`/api/asr?format=wav&rate=${REC_RATE}`, {
+      method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav,
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    const text = (d.text || "").trim();
+    if (!text) { micLabel("没听清，再说一次", ""); return; }
+    // 接在已有文字后面：可以先打一半再补一段语音
+    box.value = box.value.trim() ? `${box.value.trim()}${text}` : text;
+    box.focus();
+    micLabel("🎤 语音输入", "");
+  } catch (e) {
+    micLabel("🎤 语音输入", "");
+    alert("识别失败：" + (e && e.message ? e.message : e));
+  } finally {
+    REC.busy = false;
+  }
+}
+
 /* ---------------- 移动端页签 ---------------- */
 const isMobile = () => window.matchMedia("(max-width: 860px)").matches;
 
@@ -430,7 +571,7 @@ document.querySelectorAll(".mobnav button")
 // 念完这一条才放出下一条，包括「轮到你」的作答面板。不然语音还没读完
 // 下面的发言就全刷出来了，等于剧透。
 const TTS = { on: false, ok: false, audio: new Audio(), urls: new Map(),
-              unlocked: false, blocked: false };
+              unlocked: false, blocked: false, speaking: null };
 TTS.audio.preload = "auto";
 TTS.audio.playsInline = true;
 
@@ -549,6 +690,7 @@ async function playLine(seat, text, eid = null, onStart = null) {
     TTS.audio.src = await audioURL(seat, text);
     await TTS.audio.play();
     TTS.blocked = false;
+    markSpeaking(seat);                // 等 play() 真的开始了再亮，免得被自动播放策略拦下还挂在那
     if (onStart) onStart();            // 这一刻起 currentTime 才是新音频的时间轴
     // pause() 不会触发 ended，所以把 resolve 留一份出去，停止时能直接叫醒这个 await
     await new Promise((res) => { TTS.finish = res; TTS.audio.onended = res; TTS.audio.onerror = res; });
@@ -557,6 +699,7 @@ async function playLine(seat, text, eid = null, onStart = null) {
   } finally {
     TTS.finish = null;
     markPlaying(null);
+    markSpeaking(null);
   }
 }
 
@@ -632,6 +775,7 @@ function stopSpeaking() {
   Q.items.length = 0;
   TTS.audio.pause();
   TTS.audio.currentTime = 0;
+  markSpeaking(null);
   if (TTS.finish) TTS.finish();        // 叫醒正卡在「等播完」的那个 await，否则 drain 会一直挂着
   Q.busy = false;
 }
@@ -678,6 +822,21 @@ async function stopGame() {
   await post(api.stop(), { token: R.token }).catch(() => {});
 }
 
+// 昵称：进多人模式时向服务端要一个「中文名 + 6 位数字」填进去，省得每个人现起名。
+// 只覆盖没动过的那一栏 —— 自己改过名字就一直用自己的。
+let nickAuto = "";
+
+async function fillNick(force = false) {
+  const box = $("nickName");
+  if (!force && box.value && box.value !== nickAuto) return;
+  try {
+    const d = await (await fetch("/api/name")).json();
+    box.value = nickAuto = d.name;
+  } catch (_) {}
+}
+
+$("nickName").addEventListener("input", () => { nickAuto = ""; });
+
 function syncModeUI() {
   const m = $("modeSel").value;
   $("roleField").hidden = m !== "play";           // 身份只在单人模式下用得上
@@ -685,6 +844,7 @@ function syncModeUI() {
   $("btnStart").hidden = m === "multi";           // 多人局由房主在房间里开
   $("btnStop").hidden = m === "multi";
   if (m !== "multi" && R.code) leaveRoom();
+  if (m === "multi" && !R.code) fillNick();
 }
 $("modeSel").addEventListener("change", syncModeUI);
 syncModeUI();
@@ -727,7 +887,7 @@ $("barNew").addEventListener("click", startGame);
 $("barStop").addEventListener("click", stopGame);
 
 $("cloneOn").addEventListener("change", (e) => {
-  try { localStorage.setItem("ww_clone", e.target.checked ? "1" : "0"); } catch (_) {}
+  try { localStorage.setItem("ww_clone2", e.target.checked ? "1" : "0"); } catch (_) {}
   TTS.urls.clear();                    // 换了音色，之前那些 blob 不能再用
   stopSpeaking();
 });
@@ -760,9 +920,10 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
   $("modelSel").innerHTML = cfg.models
     .map((m) => `<option value="${m}"${m === cfg.model ? " selected" : ""}>${m}</option>`).join("");
   TTS.ok = !!cfg.tts;
+  REC.ok = !!cfg.asr;
   $("cloneOn").checked = cfg.clone_default !== false;
   try {
-    const c = localStorage.getItem("ww_clone");
+    const c = localStorage.getItem("ww_clone2");
     if (c !== null) $("cloneOn").checked = c === "1";
   } catch (_) {}
   if (!TTS.ok) {

@@ -11,6 +11,8 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import asr
+from . import image_api
 from . import room as rooms
 from . import tts
 from .game import GAMES_DIR, Game
@@ -57,6 +59,8 @@ async def config() -> dict[str, Any]:
         "models": list(cfg.models),
         "note": f"{cfg.provider}" if ok else "mock（未检测到 ALIYUN_BAILIAN_API_KEY）",
         "tts": tts.available(),
+        "image": image_api.available(),
+        "asr": asr.available(),
         "clone_default": tts.load_tts_config().clone_default_on,
     }
 
@@ -188,6 +192,64 @@ async def speak(body: dict[str, Any] = Body(...)) -> Response:
         raise HTTPException(502, f"合成失败：{type(exc).__name__}: {exc}") from exc
     return Response(audio, media_type="audio/mpeg",
                     headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.post("/api/image")
+async def image(body: dict[str, Any] = Body(...)) -> Response:
+    """出一张图（方舟 Seedream）。给了 seed 就按 prompt 落盘缓存，重画不再花钱。"""
+    prompt = str(body.get("prompt", "")).strip()
+    if not prompt:
+        raise HTTPException(400, "缺少 prompt")
+    if not image_api.available():
+        raise HTTPException(503, f"生图未启用（缺 {image_api.credential_hint()}）")
+    seed = body.get("seed")
+    try:
+        png = await image_api.generate_png(
+            prompt[:2000],
+            kind=str(body.get("kind") or "role"),
+            seed=int(seed) if seed is not None else None,
+            ref_images=[str(r) for r in (body.get("ref_images") or [])] or None,
+            model=body.get("model") or None,
+            size=body.get("size") or None,
+            cutout=bool(body.get("cutout")),
+        )
+    except image_api.SensitiveContentError as exc:
+        raise HTTPException(400, f"内容安全拦截，换个说法：{exc}") from exc
+    except Exception as exc:
+        raise HTTPException(502, f"生图失败：{type(exc).__name__}: {exc}") from exc
+    return Response(png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.post("/api/asr")
+async def listen(request: Request) -> dict[str, Any]:
+    """把一段录音转成文字。body 直接是音频字节，格式和采样率走 query。
+
+    前端录的是 16k 单声道 wav —— 浏览器自带的 MediaRecorder 各家吐的格式不一样
+    （Chrome webm/opus、Safari mp4），统一在前端降采样编 wav，这里只认一种。
+    """
+    if not asr.available():
+        raise HTTPException(503, "语音输入未启用（缺 DASHSCOPE_API_KEY / ALIYUN_BAILIAN_API_KEY 或未装 dashscope）")
+    audio = await request.body()
+    if len(audio) < 2000:                     # 一点就松手，没录到东西
+        raise HTTPException(400, "录音太短了，按住多说一会儿")
+    if len(audio) > 10 * 1024 * 1024:
+        raise HTTPException(413, "录音太长了")
+    fmt = request.query_params.get("format", "wav")
+    rate = request.query_params.get("rate")
+    try:
+        text = await asr.transcribe(audio, fmt, int(rate) if rate else None)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(502, f"识别失败：{type(exc).__name__}: {exc}") from exc
+    return {"text": text}
+
+
+@app.get("/api/name")
+async def random_name() -> dict[str, str]:
+    """进多人模式时给一个现成的昵称：中文名 + 6 位数字。"""
+    return {"name": rooms.random_name()}
 
 
 # ---------------- 多人房间 ----------------

@@ -85,6 +85,45 @@ LLM transport 从 `pitchasso/llm_api` 移植过来：OpenAI 兼容的 `/v1/chat/
 - 并发：守卫 / 狼队 / 预言家三条线在同一夜里并发跑（狼队内部串行，要看到彼此的提议）；
   投票也是并发的（本来就是同时投），投完再按座位顺序公布。一局约 30~50 次调用、两三分钟。
 
+## 声音和头像
+
+朗读、语音输入、座位头像三件事都挂在同一套 key 上（百炼那把 + 方舟那把）。
+
+- **朗读发言**：`qwen-audio-3.0-tts-flash`，约 0.8s/句，是最快的一档；勾上「采用音色克隆」
+  换成 `cosyvoice-v2` 的克隆音色，一人一把真嗓子，但要约 2.4s/句，默认不开。
+  念之前先把阿拉伯数字换成中文（`backend/tts.py: normalize_digits`）——
+  不换的话「第2夜」会被念成「第两夜」。
+- **语音输入**：轮到你发言时，输入框下面有「语音输入」，点一下开始、再点一下结束，
+  走 `qwen-audio-3.0-asr-flash-streaming`（整句约 0.8s 回来）。浏览器端自己把 PCM
+  降到 16k 编成 wav 再传 —— MediaRecorder 各家格式不一样（Chrome webm、Safari mp4），
+  统一在前端出格式，服务端只认 wav。需要 https 或 localhost 才拿得到麦克风。
+- **座位头像**：12 张写实人像（6 女 6 男），每局随机抽 6 张发给 1–6 号，
+  朗读到谁，谁的头像就浮到屏幕正中、边框呼吸。图是方舟 Seedream 出的：
+
+```bash
+.venv/bin/python -m scripts.gen_avatars          # 缺哪张补哪张（已有的不重画）
+.venv/bin/python -m scripts.gen_avatars f1 m3    # 重画这几张（先删 assets/avatars-original 下的原图）
+```
+
+## 生图
+
+`backend/image_api.py` 是从 `Rinarino/util/image_api.py` 移植过来的 transport：火山引擎方舟
+Seedream，`POST /images/generations`。
+
+- 鉴权：`ARK_API_KEY`（兼容 `ARK_VOLCENGINE_API_KEY` / `VOLCENGINE_API_KEY`）
+- 配置：`config/llm_api.yaml` 的 `ark` 段（模型 / 各 kind 的出图尺寸，尺寸要落在方舟的
+  3,686,400–4,624,220 像素区间里，超了直接 400）
+- 给了 `seed` 的请求按 prompt 落盘 `data/images/`，重画同一张不花第二次钱；没给 seed 就每次都是新的
+- 内容安全拦截会**误判**，所以按可重试处理，重试完还不过才报 `SensitiveContentError`
+- 立绘去背（`cut_out`）也一并搬了过来：从四边 flood fill 掉近白底，只吃边缘连通域，
+  所以人物身上的白衣服不会被一起抠掉
+
+```bash
+.venv/bin/python -m backend.image_api --prompt "..." --kind role -o out.png
+curl -X POST localhost:8130/api/image -H 'content-type: application/json' \
+     -d '{"prompt":"...","kind":"role","seed":1}' -o out.png
+```
+
 ## 上线
 
 走 cloudflared tunnel：公网流量经 Cloudflare 回落到本机的 uvicorn，不需要公网 IP、不用开端口。
@@ -128,9 +167,14 @@ backend/
   llm_api.py   transport（移植自 pitchasso/llm_api）
   cli.py       命令行跑一局
   tts.py       语音合成（qwen-audio-3.0-tts-flash），发言落地即预热、按文本落盘缓存
+  asr.py       语音输入（qwen-audio-3.0-asr-flash-streaming），前端传 16k wav
+  image_api.py 生图（方舟 Seedream，移植自 Rinarino/util/image_api）
+scripts/       gen_avatars.py：出 12 张座位头像
 deploy/        run_server.sh / run_cf.sh / kill_cf.sh / check_cf.sh / setup_tunnel.sh
 frontend/      index.html / style.css / app.js（原生三栏 UI，SSE 增量渲染）
+  img/avatars/ 12 张座位头像（320px；2144px 原图在 assets/ 下，不进仓库）
 config/        llm_api.yaml
 logs/games/    每局存档 JSON（完整上帝视角），左栏「历史对话」可回放
 data/tts/      语音合成缓存（按文本 sha1）
+data/images/   生图缓存（按 prompt+seed sha1）
 ```

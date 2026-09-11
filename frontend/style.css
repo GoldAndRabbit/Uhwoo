@@ -46,7 +46,8 @@ button{font:inherit;cursor:pointer;}
 .prow:hover{background:#f4f2ee;}
 .prow.active{border-color:#8fb99b;box-shadow:inset 3px 0 0 #4c8c62;}
 .prow.dead{opacity:.5;}
-.prow .pname{font-weight:600;white-space:nowrap;}
+.prow .pname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+             max-width:104px;}
 .prow .rtag{border-radius:5px;padding:0 6px;font-size:11px;white-space:nowrap;}
 .prow .pmeta{margin-left:auto;text-align:right;font-size:10.5px;color:var(--dim);line-height:1.35;
               white-space:nowrap;flex-shrink:0;}
@@ -67,14 +68,32 @@ button{font:inherit;cursor:pointer;}
 .wave b:nth-child(3){animation-delay:.3s;}
 @keyframes wv{0%,100%{height:4px}50%{height:12px}}
 .bubble.judgeline{background:#f4f2f8;color:#4b3f6b;}
-.ava{width:76px;height:76px;border-radius:14px;object-fit:cover;flex:0 0 auto;
-     background:#efece6;border:1px solid var(--line);}
-.ava.sm{width:26px;height:26px;border-radius:7px;margin-top:1px;}
-/* 头像在上、号码身份在下，竖着一列 */
+/* ---------- 玩家头像：号码压在下半部当角标 ---------- */
+.face{position:relative;display:inline-block;flex:0 0 auto;width:58px;height:58px;overflow:hidden;
+      border-radius:12px;background:#efece6;border:1px solid var(--line);line-height:0;}
+.face img,.face-blank{display:block;width:100%;height:100%;object-fit:cover;}
+/* 角标压在头像下沿，底下垫一层由深到透的渐变，浅色衣服上也认得出字 */
+.face-no{position:absolute;left:0;right:0;bottom:0;padding:7px 0 2px;text-align:center;
+         font-size:10.5px;font-weight:600;line-height:1.2;color:#fff;letter-spacing:.5px;
+         background:linear-gradient(to top,rgba(28,24,20,.74),rgba(28,24,20,0));}
+.face.md{width:38px;height:38px;border-radius:10px;}
+.face.sm{width:30px;height:30px;border-radius:8px;}
+.face.md .face-no{font-size:10px;padding:5px 0 1px;}
+.face.sm .face-no{font-size:9.5px;padding:4px 0 0;}
+.face.sm .face-no i{display:none;}          /* 30px 上塞不下「号」字，只留数字 */
+/* 正在朗读的那个人：边框呼吸。不做缩放 —— 列表里一晃会把整行推得动来动去 */
+.face.speaking{border-color:#c0392b;animation:face-breathe 2.2s ease-in-out infinite;}
+@keyframes face-breathe{
+  0%,100%{box-shadow:0 0 0 2px #c0392b,0 0 0 2px rgba(192,57,43,.32);}
+  50%    {box-shadow:0 0 0 2px #c0392b,0 0 0 10px rgba(192,57,43,0);}
+}
+@media (prefers-reduced-motion: reduce){
+  .face.speaking{animation:none;box-shadow:0 0 0 2px #c0392b;}
+}
+@media (max-width:860px){ .face{width:46px;height:46px;border-radius:10px;} }
+/* 头像在上、身份在下，竖着一列 */
 .who{display:flex;flex-direction:column;align-items:center;gap:4px;flex:0 0 auto;}
 .who .badge{white-space:nowrap;}
-.prow .ava{width:38px;height:38px;border-radius:10px;}
-.ava.blank{display:inline-block;border-style:dashed;}
 .history .hrow{display:flex;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;
                margin-bottom:6px;background:#fcfbf9;cursor:pointer;font-size:12px;}
 .history .hrow:hover{background:#f4f2ee;}
@@ -150,7 +169,7 @@ details[open] summary::before{content:"▾ ";}
        background:var(--panel);border-bottom:1px solid var(--line);padding:9px 0;font-size:12.5px;}
 .mebar[hidden]{display:none;}
 .mebar b{font-size:13px;}
-.mebar .ava{margin-right:2px;}
+.mebar .face{margin-right:2px;}
 .mebar .role{border-radius:5px;padding:1px 7px;font-size:12px;}
 .mebar-btns{margin-left:auto;display:flex;gap:6px;}
 .mebar-btns button{border:1px solid var(--line);background:var(--panel);border-radius:7px;
@@ -252,3 +271,15 @@ details[open] summary::before{content:"▾ ";}
     .col{height:calc(100dvh - 54px);}
   }
 }
+
+/* ---------- 语音输入 ---------- */
+.ask-actions{display:flex;gap:8px;align-items:stretch;}
+.ask-actions .send{margin-top:8px;flex:1;}
+.mic{display:inline-flex;align-items:center;justify-content:center;gap:6px;margin-top:8px;
+     border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--dim);
+     padding:7px 14px;white-space:nowrap;}
+.mic:disabled{opacity:.5;cursor:not-allowed;}
+.mic.rec{border-color:#c0392b;color:#c0392b;background:#fdf0ee;}
+.mic.rec .dot{width:8px;height:8px;border-radius:50%;background:#c0392b;animation:blink 1s infinite;}
+.mic.busy{color:var(--dim);}
+@keyframes blink{50%{opacity:.25;}}

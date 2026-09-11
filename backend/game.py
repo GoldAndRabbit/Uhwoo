@@ -11,7 +11,7 @@ from typing import Any, Callable
 from . import prompts
 from . import tts as tts_mod
 from .llm import LLMClient
-from .model import SETUP, Event, LLMCall, Player, Role
+from .model import AVATARS, SETUP, Event, LLMCall, Player, Role
 
 GAMES_DIR = Path(__file__).resolve().parent.parent / "logs" / "games"   # 对局存档
 
@@ -76,6 +76,9 @@ class Game:
             self.rng.shuffle(seats)
             self.humans = set(seats[:max(1, min(6, humans))])
         self.names: dict[int, str] = dict(names or {})
+        # 每局从 12 张头像里抽 6 张发给 1–6 号：同一局里不重样，换一局就换一拨人。
+        # 跟着 self.rng 走，所以同一个 seed 复盘出来的还是同一批脸。
+        self.avatars: dict[int, str] = dict(zip(range(1, 7), self.rng.sample(AVATARS, 6)))
         self.pending: dict[int, dict[str, Any]] = {}   # 座位 -> 正在等他回答的问题
         self._answers: dict[int, asyncio.Future] = {}
 
@@ -332,6 +335,7 @@ class Game:
             "human": viewer,
             "humans": sorted(self.humans),
             "names": {str(k): v for k, v in self.names.items()},
+            "avatars": {str(k): v for k, v in self.avatars.items()},
             "pending": self.pending.get(viewer) if viewer else None,
             "players": [p.public(reveal=show_roles or p.seat == viewer)
                         for p in self.players],

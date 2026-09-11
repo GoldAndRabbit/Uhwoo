@@ -16,6 +16,24 @@ siliconflow:
   base_url: https://api.siliconflow.cn/v1
   default_model: Qwen/Qwen3.6-35B-A3B
 
+# 生图（火山引擎方舟 Seedream）。鉴权：ARK_API_KEY（兼容 ARK_VOLCENGINE_API_KEY /
+# VOLCENGINE_API_KEY 两个别名），同样可以写进项目根的 .env。
+# 方舟的硬限制：下限 3,686,400 像素、上限 4,624,220 像素（超了直接 400），
+# 下面每一档都是该比例在这个区间里能取到的最大值。
+ark:
+  base_url: https://ark.cn-beijing.volces.com/api/v3
+  image_model: doubao-seedream-5-0-pro-260628
+  models:
+    - doubao-seedream-5-0-pro-260628     # 5.0 pro，默认
+    - doubao-seedream-5-0-260128         # 5.0 全量
+    - doubao-seedream-4-5-251128
+  watermark: false
+  timeout: 180
+  sizes:
+    role: 2144x2144         # 1:1    身份牌 / 座位头像
+    bg: 2864x1608           # 16:9   背景板
+    sprite: 1608x2856       # 9:16   竖版立绘
+
 # 狼人杀 agent 用哪一家、哪个模型。models 是 UI 下拉框里的候选，model 是默认值。
 #   enable_thinking: 仅对 Qwen3 混合思考模型有意义。这里每次调用要的是一段 JSON，
 #                    模型自己的 thinking 字段已经承担了推理，关掉思考更快更便宜。
@@ -50,7 +68,9 @@ tts:
   # 代价是慢一档：约 3.2s/句（cosyvoice-v2 本身比 flash 慢 1.2s，克隆再加 1.2s），
   # 但事件一落地就在后台预热，通常被上一句的播放时间盖掉。
   clone:
-    default_on: true
+    # 默认关：flash 预置音色约 0.85s/句，克隆音色约 3.2s/句，等一句话出声的时间差得太多。
+    # 想要一人一把嗓子就在左栏勾上「采用音色克隆」。
+    default_on: false
     model: cosyvoice-v2
     voices:
       0: cosyvoice-v2-uhwoo-8088dbf3c81b4bb1b9dad7ef57371a6c   # 法官 · wu_gang
@@ -60,3 +80,12 @@ tts:
       4: cosyvoice-v2-uhwoo-11ac76afc9a940358e36ab25b2919ccb   # lin_zhi_lin
       5: cosyvoice-v2-uhwoo-541d552e5e804ea3b672b80f048f276e   # xu_jing_yu
       6: cosyvoice-v2-uhwoo-878665349a29486fa59d6ed6e9f5aaf7   # dee_hsu
+
+# 语音输入。同一把 DashScope key，qwen-audio-3.0-asr-flash-streaming 是最快的一档。
+#   websocket_url: 只有需要指定业务空间（workspace）或地域时才填，
+#                  形如 wss://<workspace-id>.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference
+asr:
+  enabled: true
+  model: qwen-audio-3.0-asr-flash-streaming
+  sample_rate: 16000
+  # websocket_url:
