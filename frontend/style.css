@@ -46,6 +46,8 @@ button{font:inherit;cursor:pointer;}
 .prow:hover{background:#f4f2ee;}
 .prow.active{border-color:#8fb99b;box-shadow:inset 3px 0 0 #4c8c62;}
 .prow.dead{opacity:.5;}
+.prow.judge{cursor:default;color:var(--dim);}          /* 法官不参与筛选，点不动 */
+.prow.judge:hover{background:var(--panel);}
 .prow .pname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
              max-width:104px;}
 .prow .rtag{border-radius:5px;padding:0 6px;font-size:11px;white-space:nowrap;}
@@ -70,7 +72,8 @@ button{font:inherit;cursor:pointer;}
 .bubble.judgeline{background:#f4f2f8;color:#4b3f6b;}
 /* 开局的六连号码牌 */
 .roster-box{width:100%;}
-.roster{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:9px;}
+.roster{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin-bottom:9px;}
+.roster-split{width:1px;background:rgba(38,36,31,.16);margin:2px 3px;flex:0 0 auto;}
 .roster-note{font-size:12px;color:var(--dim);}
 
 /* ---------- 玩家头像：号码压在下半部当角标 ---------- */
@@ -86,14 +89,22 @@ button{font:inherit;cursor:pointer;}
 .face.md .face-no{font-size:10px;padding:5px 0 1px;}
 .face.sm .face-no{font-size:9.5px;padding:4px 0 0;}
 .face.sm .face-no i{display:none;}          /* 30px 上塞不下「号」字，只留数字 */
-/* 正在朗读的那个人：边框呼吸。不做缩放 —— 列表里一晃会把整行推得动来动去 */
-.face.speaking{border-color:#c0392b;animation:face-breathe 2.2s ease-in-out infinite;}
+.face .face-no{font-size:10.5px;}           /* 「法官」两个字比号码宽，统一收一点 */
+.face-no i{font-style:normal;}              /* <i> 只用来在小尺寸下藏「号」字，不是斜体 */
+/* 正在朗读的那个人：边框呼吸。不做缩放 —— 列表里一晃会把整行推得动来动去。
+   身份揭示后呼吸灯跟着身份的颜色走，没揭示就用中性的品牌红 */
+.face{--breathe:#c0392b;--breathe-a:rgba(192,57,43,.46);}
+.face.g-狼人{--breathe:var(--wolf-fg);--breathe-a:rgba(165,42,42,.46);}
+.face.g-预言家{--breathe:var(--seer-fg);--breathe-a:rgba(31,91,154,.46);}
+.face.g-守卫{--breathe:var(--guard-fg);--breathe-a:rgba(44,107,65,.46);}
+.face.g-平民{--breathe:var(--vill-fg);--breathe-a:rgba(107,101,88,.46);}
+.face.speaking{border-color:var(--breathe);animation:face-breathe 3.6s ease-in-out infinite;}
 @keyframes face-breathe{
-  0%,100%{box-shadow:0 0 0 2px #c0392b,0 0 0 2px rgba(192,57,43,.32);}
-  50%    {box-shadow:0 0 0 2px #c0392b,0 0 0 10px rgba(192,57,43,0);}
+  0%,100%{box-shadow:0 0 0 2px var(--breathe),0 0 0 3px var(--breathe-a);}
+  50%    {box-shadow:0 0 0 2px var(--breathe),0 0 0 20px transparent;}
 }
 @media (prefers-reduced-motion: reduce){
-  .face.speaking{animation:none;box-shadow:0 0 0 2px #c0392b;}
+  .face.speaking{animation:none;box-shadow:0 0 0 2px var(--breathe);}
 }
 @media (max-width:860px){ .face{width:46px;height:46px;border-radius:10px;} }
 /* 头像在上、身份在下，竖着一列 */
@@ -140,19 +151,31 @@ details[open] summary::before{content:"▾ ";}
 .log{padding-top:14px;padding-bottom:8px;}
 .row{display:flex;gap:8px;align-items:flex-start;margin-bottom:9px;}
 .badge{flex:0 0 auto;border-radius:6px;padding:2px 8px;font-size:11.5px;white-space:nowrap;margin-top:2px;}
-.only{flex:0 0 auto;border:1px solid #e7c9c9;color:#a33b2c;background:#fdf3f2;border-radius:11px;
-      padding:1px 9px;font-size:11px;white-space:nowrap;margin-top:7px;}
+/* 正文后面的注脚（可见范围之类）：小一号、淡一点，跟在句子后面不换行 */
+.aside{margin-left:6px;font-size:11px;opacity:.62;white-space:nowrap;}
 .bubble{background:#f4f2ee;border-radius:10px;padding:7px 12px;max-width:860px;}
 .bubble.revealing{min-height:1.65em;}
 .ck{display:none;}
 .ck.on{display:inline;animation:ckIn .34s cubic-bezier(.4,0,.2,1) both;}
 @keyframes ckIn{from{opacity:0}to{opacity:1}}
 .bubble.say{cursor:pointer;}
-.bubble.say:hover{background:#eeebe5;}
+.bubble.say:hover{filter:brightness(.97);}
+/* 身份揭示时（模拟模式全程、单人/多人模式在结束后）气泡跟着身份上色 */
+.bubble.r-狼人{background:var(--wolf-bg);color:var(--wolf-fg);}
+.bubble.r-预言家{background:var(--seer-bg);color:var(--seer-fg);}
+.bubble.r-守卫{background:var(--guard-bg);color:var(--guard-fg);}
+.bubble.r-平民{background:var(--vill-bg);color:var(--vill-fg);}
 .bubble.plain{background:#f8f7f4;color:#6b6558;font-size:12px;}
 .bubble.result{background:#f1f5f0;color:#33553c;}
 .bubble.wolfnight{background:#fdf3f2;}
-.phase{display:flex;align-items:baseline;gap:12px;margin:20px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+/* 一天/一夜整段包在一个底色块里：夜里冷灰、白天米黄。
+   分隔条自己不再上色（否则底色套底色），只留一根细线压住段首 */
+.seg{border-radius:14px;padding:2px 14px 10px;margin:0 0 14px;background:#eeecf2;}
+.seg.day{background:#f8f2e4;}
+.seg .bubble.plain,.seg .bubble.say:not([class*="r-"]),.seg .bubble:not([class*="r-"]):not(.judgeline):not(.result){
+  background:rgba(255,255,255,.72);}      /* 没有身份色的气泡在底色上要提亮，否则糊成一片 */
+.phase{display:flex;align-items:baseline;gap:12px;margin:6px 0 10px;padding:8px 2px;
+       border-bottom:1px solid rgba(38,36,31,.09);}
 .phase h2{margin:0;font-size:17px;font-weight:600;}
 .phase .note{margin-left:auto;font-size:12px;color:var(--dim);}
 .info{display:inline-block;background:#f4f2ee;border-radius:8px;padding:4px 12px;font-size:12px;
@@ -204,9 +227,6 @@ details[open] summary::before{content:"▾ ";}
 .members .kick:hover{opacity:1;}
 
 /* ---------- 单人模式 ---------- */
-.me{background:#f1f5f0;border:1px solid #cfe0d2;border-radius:8px;padding:8px 10px;margin-bottom:10px;
-    font-size:12px;color:#33553c;}
-.me b{font-size:13px;}
 .ask{position:sticky;bottom:0;z-index:5;background:var(--panel);border-top:1px solid var(--line);
      box-shadow:0 -10px 14px -8px rgba(0,0,0,.06);padding:10px 0 12px;}
 .ask[hidden]{display:none;}

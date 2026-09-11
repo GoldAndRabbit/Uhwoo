@@ -19,7 +19,7 @@
     </label>
     <label class="field" id="roleField" hidden>身份
       <select id="roleSel">
-        <option value="" selected>随机（推荐）</option>
+        <option value="" selected>随机（默认）</option>
         <option value="狼人">狼人</option>
         <option value="预言家">预言家</option>
         <option value="守卫">守卫</option>
@@ -42,12 +42,15 @@
         <button id="btnLeave" class="btn dashed">退出房间</button>
       </div>
     </div>
-    <div id="meCard" class="me" hidden></div>
     <label class="field">模型
       <select id="modelSel"></select>
     </label>
-    <label class="check"><input type="checkbox" id="ttsOn"> 自动朗读发言内容</label>
-    <label class="check"><input type="checkbox" id="cloneOn"> 采用音色克隆（慢一档，一人一把嗓子）</label>
+    <label class="field" id="voiceField">音色
+      <select id="voiceMode">
+        <option value="fast">快速语音模式 · 约 0.8s/句</option>
+        <option value="real" selected>真实语音模式 · 约 1.6s/句</option>
+      </select>
+    </label>
     <button id="btnStart" class="btn primary">开一局</button>
     <button id="btnStop" class="btn ghost" disabled>停止这一局</button>
 

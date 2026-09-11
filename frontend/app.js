@@ -18,31 +18,55 @@ const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<"
 const roleOf = (seat) => S.state?.players?.find((p) => p.seat === seat)?.role || "";
 const nameOf = (seat) => S.state?.names?.[String(seat)] || `${seat}号`;
 const isPlay = () => S.state?.mode === "play";
+// 音色两档：快速 = qwen-audio-3.0-tts-flash（一把嗓子，约 0.8s/句），
+// 真实 = cosyvoice-v3.5-flash 的克隆音色（男女跟着头像走，约 1.6s/句）
+const realVoice = () => $("voiceMode").value === "real";
 
 // 玩家头像：开局时后端从 12 张里随机抽 6 张发给 1–6 号（state.avatars）。
 // 事件流、左栏玩家、顶栏共用这一个，号码压在头像下半部当角标 —— 谁在说话一眼认得出，
 // 也省得每处都在旁边再挂一个「N号」的标签。
 const seatFace = (seat) => S.state?.avatars?.[String(seat)] || null;
 
-function face(seat, cls = "") {
+function face(seat, cls = "", label = "", eid = null) {
   const key = seatFace(seat);
-  const speaking = TTS.speaking === seat ? " speaking" : "";
+  // 事件流里的头像按**事件**判断在不在说话：同一个人（尤其法官）在历史里出现很多次，
+  // 按座位判断会让他所有的历史气泡一起呼吸。左栏/顶栏那种常驻位没有 eid，按座位判断
+  const speaking = (eid === null ? TTS.speaking === seat : TTS.speakingId === eid)
+    ? " speaking" : "";
+  // 身份揭示了就让呼吸灯跟着身份的颜色走（模拟模式全程可见）
+  const role = roleOf(seat);
+  cls = cls + (role ? ` g-${role}` : "");
   const img = key
     ? `<img src="/static/img/avatars/${key}.png" alt="${seat}号">`
     : `<span class="face-blank"></span>`;   // 老存档没发过头像，留个占位别塌掉
+  const tag = label || `${seat}<i>号</i>`;
   return `<span class="face ${cls}${speaking}" data-seat="${seat}">${img}
-            <b class="face-no">${seat}<i>号</i></b></span>`;
+            <b class="face-no">${tag}</b></span>`;
 }
+
+// 法官（0 号）：也每局换一张脸，角标写「法官」而不是号码
+const judgeFace = (cls = "", eid = null) => face(0, cls, "法官", eid);
 
 // 朗读到谁，谁的头像就呼吸一下（左栏、事件流、顶栏是同一个 seat，一起亮）
-function markSpeaking(seat) {
-  TTS.speaking = seat || null;
-  document.querySelectorAll(".face").forEach((el) =>
-    el.classList.toggle("speaking", String(TTS.speaking) === el.dataset.seat));
+function markSpeaking(seat, eid = null) {
+  // 法官是 0 号，`seat || null` 会把它当成空值 —— 必须显式判 null
+  TTS.speaking = seat === null || seat === undefined ? null : seat;
+  TTS.speakingId = eid;
+  document.querySelectorAll(".face").forEach((el) => {
+    const row = el.closest(".row[data-eid]");
+    el.classList.toggle("speaking", row
+      ? TTS.speakingId !== null && String(TTS.speakingId) === row.dataset.eid
+      : TTS.speaking !== null && String(TTS.speaking) === el.dataset.seat);
+  });
 }
 
-const audienceLabel = (a) =>
-  a === "all" ? null : "只有 " + a.map((s) => s + "号").join("、") + " 看得到";
+const audienceLabel = (a) => {
+  if (a === "all") return null;
+  const who = a.map((s) => `${s}号`);
+  // 两个人用「和」，三个以上前面顿号、最后一个还是「和」：2号、4号和5号
+  const list = who.length > 1 ? who.slice(0, -1).join("、") + "和" + who[who.length - 1] : who[0];
+  return `可见范围：${list}`;
+};
 
 /* ---------------- 左栏 ---------------- */
 function renderPlayers() {
@@ -62,11 +86,16 @@ function renderPlayers() {
       <span class="pmeta">${meta}</span></div>`;
   });
   const sysActive = S.filter === "sys" ? " active" : "";
+  // 法官排在 6 个玩家后面：他不是玩家，但这一局的脸也该有个地方挂着
+  const judgeRow = seatFace(0)
+    ? `<div class="prow judge">${judgeFace("md")}
+         <span class="pname">法官</span>
+         <span class="pmeta">主持本局</span></div>` : "";
   box.innerHTML =
     `<div class="prow sys${sysActive}" data-seat="sys">
        <span class="pname">系统全局状态</span>
-       <span class="pmeta">${st.sys_calls} 次调用</span></div>` + rows.join("");
-  box.querySelectorAll(".prow").forEach((el) =>
+       <span class="pmeta">${st.sys_calls} 次调用</span></div>` + rows.join("") + judgeRow;
+  box.querySelectorAll(".prow[data-seat]").forEach((el) =>
     el.addEventListener("click", () => {
       const v = el.dataset.seat;
       const seat = v === "sys" ? "sys" : Number(v);
@@ -76,13 +105,6 @@ function renderPlayers() {
       if (isMobile() && S.filter !== null) setTab("ctx");
     })
   );
-  const me = st.human ? st.players.find((p) => p.seat === st.human) : null;
-  $("meCard").hidden = !me;
-  if (me) {
-    $("meCard").innerHTML =
-      `你是 <b>${me.seat}号 · ${me.role || "?"}</b>　${me.alive ? "存活" : "已出局"}<br>
-       只看得到公开发言、投票和你自己的信息。`;
-  }
   const aliveN = st.players.filter((p) => p.alive).length;
   $("aliveCount").textContent = `${aliveN}/${st.players.length} 存活`;
   $("callCount").textContent = st.calls;
@@ -156,8 +178,35 @@ function cardHTML(c) {
 }
 
 /* ---------------- 右栏 ---------------- */
+// 「存活玩家 / 发言顺序」永远跟在法官那句后面，是它的注脚而不是一条独立事件，
+// 所以渲染时直接并进法官的气泡里（括号），少占一行
+const isRoster = (ev) => ev && ev.kind === "system" && ev.text.startsWith("存活玩家");
+
 function renderLog() {
-  $("log").innerHTML = S.events.map(rowHTML).join("") ||
+  // 按天/夜分段：每一段整个包进一个底色块里（夜里冷灰、白天米黄），
+  // 翻长事件流时一眼看得出自己在哪一段，而不是只有一根分隔条
+  const out = [];
+  let seg = null;
+  const flush = () => {
+    if (seg) out.push(`<section class="seg ${seg.cls}">${seg.rows.join("")}</section>`);
+    seg = null;
+  };
+  for (let i = 0; i < S.events.length; i++) {
+    const ev = S.events[i];
+    if (isRoster(ev) && (seg ? seg.rows.length : out.length)) continue;   // 已并进上一条
+    const next = S.events[i + 1];
+    const html = rowHTML(ev, isRoster(next) ? next.text : "");
+    if (ev.kind === "phase") {
+      flush();
+      seg = { cls: ev.text.includes("天") ? "day" : "night", rows: [html] };
+    } else if (seg) {
+      seg.rows.push(html);
+    } else {
+      out.push(html);                    // 开局那条在第一段之前
+    }
+  }
+  flush();
+  $("log").innerHTML = out.join("") ||
     `<div class="empty">点「开一局」，这里会逐条出现夜里的行动和白天的发言。</div>`;
 }
 
@@ -171,14 +220,16 @@ function playBtn(ev) {
            title="${on ? "停止" : "播放这一句"}">${on ? WAVE_ICON : PLAY_ICON}</button>`;
 }
 
-function rowHTML(ev) {
+function rowHTML(ev, extra = "") {
   const rid = ` data-eid="${ev.id}"`;
+  const note = extra ? `<span class="aside">（${esc(extra.replace(/。$/, ""))}）</span>` : "";
   const only = audienceLabel(ev.audience);
+  // 可见范围不单独占一个胶囊，跟在正文后面当个括号 —— 它只是句注脚，不该抢位置
   const onlyTag = only
-    ? `<span class="only" title="这条事件只进这些人的上下文，别人拿不到">${only}</span>` : "";
+    ? `<span class="aside" title="这条事件只进这些人的上下文，别人拿不到">（${only}）</span>` : "";
   if (ev.kind === "phase") {
     const day = ev.text.includes("天");
-    return `<div class="phase"><h2>${esc(ev.text.replace(/—/g, "").trim())}</h2>
+    return `<div class="phase${day ? " day" : ""}"><h2>${esc(ev.text.replace(/—/g, "").trim())}</h2>
       <span class="note">${day ? "白天：发言 → 投票" : "夜晚：守卫 → 狼人 → 预言家"}</span></div>`;
   }
   if (ev.kind === "system" && ev.text.startsWith("存活玩家"))
@@ -186,36 +237,42 @@ function rowHTML(ev) {
   if (ev.kind === "system" && ev.text.startsWith("游戏开始")) {
     // 开局先把 6 个人摆出来。座位清单本来就写在这条事件的文本里（agent 的上下文要用），
     // 但 UI 上有头像就够了，把那半句摘掉，只留配置
-    const roster = [1, 2, 3, 4, 5, 6].map((seat) => face(seat)).join("");
+    // 法官站最左边，用一条竖线和 1–6 号隔开 —— 他不是这一局的玩家
+    // 带上 ev.id：开局这排是「历史」，不该跟着谁在说话一起呼吸
+    const roster = (seatFace(0) ? judgeFace("", ev.id) + `<span class="roster-split"></span>` : "")
+      + [1, 2, 3, 4, 5, 6].map((seat) => face(seat, "", "", ev.id)).join("");
     const note = ev.text.replace(/共 ?6 ?名玩家：[^。]*。/, "");
-    return `<div class="row"><div class="bubble plain roster-box">
+    // 胜负条件写在开局这条底下：狼人是「人数追平就赢」，不是「杀光」
+    const win = "狼人阵营胜利条件：活着的狼人数量追平好人（2 狼对 2 好人即可），"
+              + "不必杀光；好人阵营：把 2 只狼全部票出局或杀掉。";
+    return `<div class="row"${rid}><div class="bubble plain roster-box">
       <div class="roster">${roster}</div>
-      <div class="roster-note">${esc(note)}</div></div></div>`;
+      <div class="roster-note">${esc(note)}<br>${esc(win)}</div></div></div>`;
   }
   if (ev.kind === "speech") {
     const seat = ev.seat, role = roleOf(seat);
     const body = ev.text.replace(/^[^：]*：/, "");
-    return `<div class="row"${rid}><div class="who">${face(seat)}
+    return `<div class="row"${rid}><div class="who">${face(seat, "", "", ev.id)}
         ${role ? `<span class="badge r-${role}">${role}</span>` : ""}</div>
-      <div class="bubble say">${esc(body)}</div>${playBtn(ev)}</div>`;
+      <div class="bubble say${role ? " r-" + role : ""}">${esc(body)}</div>${playBtn(ev)}</div>`;
   }
   if (ev.kind === "vote")
-    return `<div class="row"><div class="bubble plain vote">${esc(ev.text)}</div>${onlyTag}</div>`;
-  if (ev.kind === "judge")
-    return `<div class="row"${rid}><span class="badge judge">法官</span>
-      <div class="bubble judgeline">${esc(ev.text)}</div>${playBtn(ev)}</div>`;
-  if (ev.kind === "result")
-    return `<div class="row"${rid}><span class="badge judge">法官</span>
-      <div class="bubble result">${esc(ev.text)}</div>${playBtn(ev)}</div>`;
+    return `<div class="row"><div class="bubble plain vote">${esc(ev.text)}${onlyTag}</div></div>`;
+  if (ev.kind === "judge" || ev.kind === "result")
+    return `<div class="row"${rid}><div class="who">${judgeFace("", ev.id)}</div>
+      <div class="bubble ${ev.kind === "judge" ? "judgeline" : "result"}">${esc(ev.text)}${note}</div>
+      ${playBtn(ev)}</div>`;
   if (ev.kind === "night_action") {
     const role = ev.seat ? roleOf(ev.seat) : "";
     const badge = ev.seat
-      ? `<div class="who">${face(ev.seat)}
-           ${role ? `<span class="badge r-${role}">${role}</span>` : ""}</div>` : "";
+      ? `<div class="who">${face(ev.seat, "", "", ev.id)}
+           ${role ? `<span class="badge r-${role}">${role}</span>` : ""}</div>`
+      : `<div class="who">${judgeFace("", ev.id)}</div>`;
     return `<div class="row"${rid}>${badge}
-      <div class="bubble ${only ? "wolfnight" : ""}">${esc(ev.text)}</div>${onlyTag}${playBtn(ev)}</div>`;
+      <div class="bubble ${role ? "r-" + role : only ? "wolfnight" : ""}">${esc(ev.text)}${onlyTag}</div>
+      ${playBtn(ev)}</div>`;
   }
-  return `<div class="row"><div class="bubble plain">${esc(ev.text)}</div>${onlyTag}</div>`;
+  return `<div class="row"><div class="bubble plain">${esc(ev.text)}${onlyTag}</div></div>`;
 }
 
 
@@ -243,7 +300,7 @@ function connect() {
       const busy = TTS.on && TTS.ok && (Q.busy || Q.items.length);
       S.state = msg.data.state;
       if (TTS.ok && S.state.status === "running") {
-        TTS.on = !!S.state.tts && $("ttsOn").checked;
+        TTS.on = !!S.state.tts;
       }
       if (busy) {
         const known = new Set(S.events.map((e) => e.id));
@@ -366,10 +423,10 @@ function renderMeBar() {
   const me = st.human ? st.players.find((p) => p.seat === st.human) : null;
   const status = st.status === "running" ? `第${st.round}${st.phase === "night" ? "夜" : "天"}`
                : st.winner ? `${st.winner}胜` : "已停止";
-  $("meBarText").innerHTML = me
+  $("meBarText").innerHTML = (me
     ? `${face(me.seat, "sm")}你是 <b>${me.seat}号</b> <span class="role r-${me.role}">${me.role}</span>
        ${me.alive ? "" : "（已出局）"} · ${status}`
-    : `模拟模式 · 上帝视角 · ${status}`;
+    : `模拟模式 · 上帝视角 · ${status}`);
   $("barStop").disabled = !running;
   $("barNew").disabled = running;
 }
@@ -483,9 +540,18 @@ function toWav(samples, rate) {
 }
 
 async function recStart() {
-  REC.stream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-  });
+  // channelCount 写成 ideal：写死 1 的话，不支持单声道的设备会直接 OverconstrainedError。
+  // 反正下面只取 channel 0，多声道也无所谓
+  const want = { channelCount: { ideal: 1 }, echoCancellation: true, noiseSuppression: true };
+  try {
+    REC.stream = await navigator.mediaDevices.getUserMedia({ audio: want });
+  } catch (e) {
+    if (e && (e.name === "OverconstrainedError" || e.name === "NotFoundError")) {
+      REC.stream = await navigator.mediaDevices.getUserMedia({ audio: true });   // 退回最宽松的
+    } else {
+      throw e;
+    }
+  }
   const Ctx = window.AudioContext || window.webkitAudioContext;
   REC.ctx = new Ctx();
   if (REC.ctx.state === "suspended") await REC.ctx.resume();
@@ -517,6 +583,26 @@ function micLabel(txt, cls) {
   $("askMicTxt").textContent = txt;
 }
 
+// 出错时说人话：这几种原因的处理方式完全不一样，笼统报个英文没人知道该干嘛
+async function micError(e) {
+  const name = (e && e.name) || "";
+  if (name === "NotAllowedError")
+    return "浏览器没给录音权限：地址栏左边的图标里把麦克风改成「允许」，再试一次。";
+  if (name === "NotReadableError")
+    return "麦克风被别的程序占着（会议、录音软件之类），先把它关掉。";
+  if (name === "NotFoundError") {
+    let mics = -1;
+    try {
+      mics = (await navigator.mediaDevices.enumerateDevices())
+        .filter((d) => d.kind === "audioinput").length;
+    } catch (_) {}
+    return mics === 0
+      ? "这台机器上没有麦克风（Mac mini 这类台式机不带内置麦克风），接一个带麦的耳机/USB 麦克风再试。"
+      : "系统没交出麦克风：macOS 下去「系统设置 → 隐私与安全性 → 麦克风」里把浏览器打开。";
+  }
+  return "拿不到麦克风：" + (e && e.message ? e.message : e);
+}
+
 // 点一下开始录，再点一下结束并识别 —— 比「按住说话」稳：移动端按住时
 // 手指一滑出按钮就收不到 pointerup，录音会一直挂着
 async function micToggle() {
@@ -532,7 +618,7 @@ async function micToggle() {
       await recStart();
       micLabel("正在听，点一下结束", "rec");
     } catch (e) {
-      alert("拿不到麦克风：" + (e && e.message ? e.message : e));
+      alert(await micError(e));
     }
     return;
   }
@@ -580,7 +666,7 @@ document.querySelectorAll(".mobnav button")
 // 念完这一条才放出下一条，包括「轮到你」的作答面板。不然语音还没读完
 // 下面的发言就全刷出来了，等于剧透。
 const TTS = { on: false, ok: false, audio: new Audio(), urls: new Map(),
-              unlocked: false, blocked: false, speaking: null };
+              unlocked: false, blocked: false, speaking: null, speakingId: null };
 TTS.audio.preload = "auto";
 TTS.audio.playsInline = true;
 
@@ -610,11 +696,13 @@ document.addEventListener("pointerdown", () => { unlockAudio(); if (TTS.blocked)
                           { capture: true });
 
 async function audioURL(seat, text) {
-  const key = seat + "|" + text + "|" + ($("cloneOn").checked ? "c" : "p");
+  // 音色槽位由后端开局时按头像性别发好（f0–f2 / m0–m2），这里原样带回去；法官没有槽位
+  const voice = seat ? S.state?.voices?.[String(seat)] || "" : "";
+  const key = voice + "|" + seat + "|" + text + "|" + (realVoice() ? "c" : "p");
   if (TTS.urls.has(key)) return TTS.urls.get(key);
   const p = fetch("/api/tts", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ seat, text, clone: $("cloneOn").checked }),
+    body: JSON.stringify({ seat, voice, text, clone: realVoice() }),
   }).then(async (r) => {
     if (!r.ok) throw new Error((await r.json()).detail || r.status);
     return URL.createObjectURL(await r.blob());
@@ -629,6 +717,9 @@ async function audioURL(seat, text) {
 function startReveal(ev) {
   const el = document.querySelector(`.row[data-eid="${ev.id}"] .bubble`);
   if (!el) return () => {};
+  // 末尾的注脚（可见范围）不参与逐字浮出：先摘下来，正文切完再挂回去
+  const aside = el.querySelector(".aside");
+  if (aside) aside.remove();
   const full = el.textContent;
 
   // 按小段切（遇到标点断一下，否则每 4 个字一段）。一个字一个字地蹦太碎，
@@ -649,6 +740,7 @@ function startReveal(ev) {
     el.appendChild(sp);
     return sp;
   });
+  if (aside) el.appendChild(aside);
   el.classList.add("revealing");
 
   const box = $("log").parentElement;
@@ -699,7 +791,7 @@ async function playLine(seat, text, eid = null, onStart = null) {
     TTS.audio.src = await audioURL(seat, text);
     await TTS.audio.play();
     TTS.blocked = false;
-    markSpeaking(seat);                // 等 play() 真的开始了再亮，免得被自动播放策略拦下还挂在那
+    markSpeaking(seat, eid);           // 等 play() 真的开始了再亮，免得被自动播放策略拦下还挂在那
     if (onStart) onStart();            // 这一刻起 currentTime 才是新音频的时间轴
     // pause() 不会触发 ended，所以把 resolve 留一份出去，停止时能直接叫醒这个 await
     await new Promise((res) => { TTS.finish = res; TTS.audio.onended = res; TTS.audio.onerror = res; });
@@ -797,12 +889,12 @@ async function startGame() {
   $("barNew").disabled = true;
   S.readonly = false;
   stopSpeaking();
-  TTS.on = TTS.ok && $("ttsOn").checked;          // 以点开一局这一刻的勾选为准
+  TTS.on = TTS.ok;
   const r = await fetch("/api/start", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: $("modelSel").value, tts: TTS.on, mode: $("modeSel").value,
-      clone: $("cloneOn").checked,
+      clone: realVoice(),
       role: $("modeSel").value === "play" ? $("roleSel").value : "",
     }),
   });
@@ -878,10 +970,10 @@ $("btnLeave").addEventListener("click", leaveRoom);
 
 $("btnRoomStart").addEventListener("click", async () => {
   unlockAudio();
-  TTS.on = TTS.ok && $("ttsOn").checked;
+  TTS.on = TTS.ok;
   try {
     await post(`/api/room/${R.code}/start`, {
-      token: R.token, model: $("modelSel").value, tts: TTS.on, clone: $("cloneOn").checked,
+      token: R.token, model: $("modelSel").value, tts: TTS.on, clone: realVoice(),
     });
     S.events = []; S.calls = []; S.filter = null;
     renderAsk(null);
@@ -895,17 +987,10 @@ $("btnStop").addEventListener("click", stopGame);
 $("barNew").addEventListener("click", startGame);
 $("barStop").addEventListener("click", stopGame);
 
-$("cloneOn").addEventListener("change", (e) => {
-  try { localStorage.setItem("ww_clone2", e.target.checked ? "1" : "0"); } catch (_) {}
+$("voiceMode").addEventListener("change", (e) => {
+  try { localStorage.setItem("ww_voice", e.target.value); } catch (_) {}
   TTS.urls.clear();                    // 换了音色，之前那些 blob 不能再用
   stopSpeaking();
-});
-
-$("ttsOn").addEventListener("change", (e) => {
-  if (e.target.checked) unlockAudio();
-  TTS.on = TTS.ok && e.target.checked;
-  try { localStorage.setItem("ww_tts", TTS.on ? "1" : "0"); } catch (_) {}
-  if (!TTS.on) stopSpeaking();                    // 中途取消勾选就立刻闭麦
 });
 
 // 每条气泡后面的播放按钮：正在响就停，否则单独播这一句
@@ -930,20 +1015,15 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
     .map((m) => `<option value="${m}"${m === cfg.model ? " selected" : ""}>${m}</option>`).join("");
   TTS.ok = !!cfg.tts;
   REC.ok = !!cfg.asr;
-  $("cloneOn").checked = cfg.clone_default !== false;
+  $("voiceMode").value = cfg.clone_default ? "real" : "fast";
   try {
-    const c = localStorage.getItem("ww_clone2");
-    if (c !== null) $("cloneOn").checked = c === "1";
+    const v = localStorage.getItem("ww_voice");
+    if (v === "fast" || v === "real") $("voiceMode").value = v;
   } catch (_) {}
-  if (!TTS.ok) {
-    $("ttsOn").disabled = true;
-    $("ttsOn").parentElement.title = "未配置 DASHSCOPE_API_KEY / ALIYUN_BAILIAN_API_KEY";
-  } else {
-    let want = false;
-    try { want = localStorage.getItem("ww_tts") === "1"; } catch (_) {}
-    $("ttsOn").checked = want;
-    TTS.on = want;
-  }
+  // 朗读没有开关了：后端配了 TTS 就一直念。真正的播放许可靠 unlockAudio()
+  // 在「开一局 / 加入房间」那次点击里拿到（浏览器只认用户手势里同步调用的 play）
+  TTS.on = TTS.ok;
+  if (!TTS.ok) $("voiceField").title = "未配置 DASHSCOPE_API_KEY / ALIYUN_BAILIAN_API_KEY";
   const snap = await (await fetch("/api/snapshot")).json();
   if (!snap.empty) {
     S.state = snap.state; S.events = snap.events; S.calls = snap.calls;

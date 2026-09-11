@@ -11,7 +11,7 @@ from typing import Any, Callable
 from . import prompts
 from . import tts as tts_mod
 from .llm import LLMClient
-from .model import AVATARS, SETUP, Event, LLMCall, Player, Role
+from .model import FACES_F, FACES_M, SETUP, Event, LLMCall, Player, Role
 
 GAMES_DIR = Path(__file__).resolve().parent.parent / "logs" / "games"   # 对局存档
 
@@ -76,9 +76,26 @@ class Game:
             self.rng.shuffle(seats)
             self.humans = set(seats[:max(1, min(6, humans))])
         self.names: dict[int, str] = dict(names or {})
-        # 每局从 12 张头像里抽 6 张发给 1–6 号：同一局里不重样，换一局就换一拨人。
+        # 每局随机 3 女 3 男，打乱之后发给 1–6 号：同一局里不重样，换一局就换一拨人。
         # 跟着 self.rng 走，所以同一个 seed 复盘出来的还是同一批脸。
-        self.avatars: dict[int, str] = dict(zip(range(1, 7), self.rng.sample(AVATARS, 6)))
+        women = self.rng.sample(FACES_F, 3)
+        men = self.rng.sample(FACES_M, 4)          # 多抽一张给法官
+        faces = women + men[:3]
+        self.rng.shuffle(faces)
+        self.avatars: dict[int, str] = dict(zip(range(1, 7), faces))
+        # 0 号是法官：也每局换一张脸，从男池里挑没被玩家占用的那张
+        # （法官那把嗓子是男声，脸得对得上）
+        self.avatars[0] = men[3]
+        # 朗读用哪把嗓子：性别跟着头像走，同性别的三个人各拿一把，不重样。
+        # 编码成 "f0"/"m2" 这样的槽位，前端朗读时原样传回来（见 tts.pick）
+        # 只发给 1–6 号；法官走自己那把嗓子（见 tts.pick），不占槽位，
+        # 否则它会拿到 m3，回头 % 池长度又绕回 m0，和某个玩家撞车
+        slots: dict[str, int] = {"f": 0, "m": 0}
+        self.voices: dict[int, str] = {}
+        for seat in range(1, 7):
+            g = self.avatars[seat][0]
+            self.voices[seat] = f"{g}{slots[g]}"
+            slots[g] += 1
         self.pending: dict[int, dict[str, Any]] = {}   # 座位 -> 正在等他回答的问题
         self._answers: dict[int, asyncio.Future] = {}
 
@@ -172,7 +189,8 @@ class Game:
 
         async def go() -> None:
             try:
-                await tts_mod.synthesize(text[:400], seat, clone=self.clone)
+                await tts_mod.synthesize(text[:400], self.voices.get(seat or 0),
+                                         clone=self.clone)
             except Exception:
                 pass
 
@@ -336,6 +354,7 @@ class Game:
             "humans": sorted(self.humans),
             "names": {str(k): v for k, v in self.names.items()},
             "avatars": {str(k): v for k, v in self.avatars.items()},
+            "voices": {str(k): v for k, v in self.voices.items()},
             "pending": self.pending.get(viewer) if viewer else None,
             "players": [p.public(reveal=show_roles or p.seat == viewer)
                         for p in self.players],
@@ -465,8 +484,10 @@ class Game:
         start = self.rng.choice(alive)
         i = alive.index(start)
         order = alive[i:] + alive[:i]
+        # 顺序念全了才知道自己什么时候说话，只说「从 X 号开始」不够
+        seq = "、".join(f"{s} 号" for s in order)
         self._judge(f"天亮了。现在是第 {self.round} 天。{dead}"
-                    f"现在开始发言，从 {start} 号开始。")
+                    f"现在开始发言，从 {start} 号开始，依次是 {seq}。")
         self._emit("system", f"存活玩家：{alive}，发言顺序：{order}。", order=order)
 
         for seat in order:

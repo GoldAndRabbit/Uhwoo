@@ -47,39 +47,47 @@ werewolf:
   timeout: 90
 
 # 朗读发言。鉴权用 DASHSCOPE_API_KEY，没有就退回 ALIYUN_BAILIAN_API_KEY。
+#   实测（同一句 23 字）：flash 首包 353ms / 整句 0.74s，plus 首包 496ms / 整句 1.33s。
+#   慢一倍换来的音质差别在一局狼人杀里听不出来，所以用 flash。
+#   音色：两档模型都只有 longanhuan_v3.6 一个预置音色能用（其它名字一律 RequestFailure），
+#   它是 203Hz 的女声 —— 所以「多样化」靠两条路：下面的 presets 用音高/语速把人分开，
+#   或者打开音色克隆，一人一把真嗓子。
 tts:
   enabled: true
-  # 不开音色克隆时用的预置音色：快（约 0.85s/句），但 6 个人是同一把嗓子，
-  # 只能靠 seats 里的音高/语速拉开一点差别
   model: qwen-audio-3.0-tts-flash
   voice: longanhuan_v3.6
-  seats:
-    0: {pitch_rate: 0.90, speech_rate: 0.92}   # 法官
-    1: {pitch_rate: 1.00, speech_rate: 1.05}
-    2: {pitch_rate: 0.88, speech_rate: 1.00}
-    3: {pitch_rate: 1.12, speech_rate: 1.10}
-    4: {pitch_rate: 0.94, speech_rate: 1.15}
-    5: {pitch_rate: 1.06, speech_rate: 0.98}
-    6: {pitch_rate: 0.82, speech_rate: 1.08}
 
-  # 音色克隆：参考音频复用自 pitchasso 的 ref_audios（4 男 3 女），
+  # ⚠️ 实测：这档模型**忽略 pitch_rate / speech_rate**（0.70 和 1.12 出来的基频都是
+  # 184–232Hz，和参数无关，那两个参数是 CosyVoice 的），而且只有 longanhuan_v3.6 一个
+  # 预置音色能用。所以 flash 这一档，6 个人 + 法官是同一把女声，没法分开。
+  # 真要一人一把嗓子、而且男声配男头像，只有两条路（都比 flash 慢）：
+  #   - 打开下面的 clone：真人克隆音色，约 2.4s/句
+  #   - 换 cosyvoice-v1：20 个预置音色（longxiaochun/longwan/longcheng/longhua/longshuo/
+  #     longtong/loongstella… 男女都有），首包 606ms、整句 1.17s
+  # flash 是 首包 353ms、整句 0.74s —— 现在默认按「最快」走。
+  #
+  # 座位的音色槽位（f0–f2 / m0–m2，性别跟着头像走，见 Game.voices）只在 clone 那档起作用：
+  # 同性别的三个人各拿一把，不撞车。
+
+  # 音色克隆：参考音频是 pitchasso 那批真人素材（frontend/ref_audio/*.wav），
   # 通过 https://uhwoo.com/static/ref_audio/*.wav 注册给 DashScope，
-  # 注册是一次性的，之后 voice id 和预置音色一样用，不必再传参考音频。
-  # 代价是慢一档：约 3.2s/句（cosyvoice-v2 本身比 flash 慢 1.2s，克隆再加 1.2s），
-  # 但事件一落地就在后台预热，通常被上一句的播放时间盖掉。
+  # 注册一次就行，之后 voice id 和预置音色一样用（重新注册见 scripts/enroll_voices.py）。
+  # 模型用 cosyvoice-v3.5-flash：实测首包 790ms、整句 1.65s，比 cosyvoice-v2 的
+  # 1200ms / 2.40s 快三分之一（v3.5 不认预置音色，只能用注册出来的）。
+  # 默认开着：一人一把真嗓子值这 0.9s。想要更快就在左栏切「快速语音模式」（flash，0.74s/句）。
+  # 括号里是实测基频（自相关估的），男女按这个分池，不是按名字猜的。
   clone:
-    # 默认关：flash 预置音色约 0.85s/句，克隆音色约 3.2s/句，等一句话出声的时间差得太多。
-    # 想要一人一把嗓子就在左栏勾上「采用音色克隆」。
-    default_on: false
-    model: cosyvoice-v2
-    voices:
-      0: cosyvoice-v2-uhwoo-8088dbf3c81b4bb1b9dad7ef57371a6c   # 法官 · wu_gang
-      1: cosyvoice-v2-uhwoo-5267e6b1e9864df7bdac6f3d5baaecfb   # wang_chu_qi
-      2: cosyvoice-v2-uhwoo-9aeaea7d89f34dc8929a3d8ed22a3de6   # gao_yuan_yuan
-      3: cosyvoice-v2-uhwoo-096caefbd6a44ce8bda7876a1d055734   # zhan_jun
-      4: cosyvoice-v2-uhwoo-11ac76afc9a940358e36ab25b2919ccb   # lin_zhi_lin
-      5: cosyvoice-v2-uhwoo-541d552e5e804ea3b672b80f048f276e   # xu_jing_yu
-      6: cosyvoice-v2-uhwoo-878665349a29486fa59d6ed6e9f5aaf7   # dee_hsu
+    default_on: true
+    model: cosyvoice-v3.5-flash
+    judge: cosyvoice-v3.5-flash-uhwoo-49d2d2b148d54d10b0660266d968194f   # wu_gang 119Hz
+    m:
+      - cosyvoice-v3.5-flash-uhwoo-5a9f80b0d1fb4efe9b3abc1be5f859da       # zhan_jun 143Hz
+      - cosyvoice-v3.5-flash-uhwoo-1d293bb09e5f4bc69c68513794a4fb4c       # xu_jing_yu 115Hz
+      - cosyvoice-v3.5-flash-uhwoo-6ae3ef1887bf42f9a852c55cc99f1b04       # wang_chu_qi 170Hz
+    f:
+      - cosyvoice-v3.5-flash-uhwoo-449263d0e9064820a05342f0e439f060       # gao_yuan_yuan 200Hz
+      - cosyvoice-v3.5-flash-uhwoo-7299bc11b94a475489c821bfe9ba1913       # lin_zhi_lin 219Hz
+      - cosyvoice-v3.5-flash-uhwoo-2d58fcd0ebdc4a07b675f58fb7395e9d       # dee_hsu 219Hz
 
 # 语音输入。同一把 DashScope key，qwen-audio-3.0-asr-flash-streaming 是最快的一档。
 #   websocket_url: 只有需要指定业务空间（workspace）或地域时才填，

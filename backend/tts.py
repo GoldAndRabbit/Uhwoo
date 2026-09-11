@@ -1,7 +1,9 @@
 """语音合成：阿里云百炼 qwen-audio-3.0-tts-flash，把白天的发言念出来。
 
 - 鉴权：DASHSCOPE_API_KEY，没有就退回 ALIYUN_BAILIAN_API_KEY（同一把百炼 key）
-- 配置：config/llm_api.yaml 的 tts 段（model / voice / 每个座位的音高语速）
+- 配置：config/llm_api.yaml 的 tts 段（model / voice / 按性别分的音色池）
+- 谁用哪把嗓子跟着头像的性别走：Game 开局时给每个座位发一个槽位（f0–f2 / m0–m2），
+  朗读时原样传回来，同性别的三个人各拿一把，不重样（见 pick）
 - 念之前先把阿拉伯数字改写成中文数字：「第2夜」交给模型会念成「第两夜」
 - 合成结果按 sha1(model|voice|seat|text) 落盘 data/tts/，重复播放不再花钱
 - SDK 是同步的，统一用 asyncio.to_thread 包一层，别卡住事件循环
@@ -24,16 +26,6 @@ from .llm_api import CONFIG_PATH, ROOT, load_dotenv
 logger = logging.getLogger(__name__)
 CACHE_DIR = ROOT / "data" / "tts"
 
-# 只有 longanhuan_v3.6 一个音色可用，所以用音高/语速把 6 个座位区分开
-DEFAULT_SEAT_STYLES: dict[int, dict[str, float]] = {
-    0: {"pitch_rate": 0.90, "speech_rate": 0.92},      # 0 号 = 法官（上帝）：低沉、慢一点
-    1: {"pitch_rate": 1.00, "speech_rate": 1.05},
-    2: {"pitch_rate": 0.88, "speech_rate": 1.00},
-    3: {"pitch_rate": 1.12, "speech_rate": 1.10},
-    4: {"pitch_rate": 0.94, "speech_rate": 1.15},
-    5: {"pitch_rate": 1.06, "speech_rate": 0.98},
-    6: {"pitch_rate": 0.82, "speech_rate": 1.08},
-}
 
 
 # 数字读法：模型把「第2夜」念成「第两夜」、「2号」念成「两号」，都不对。
@@ -73,18 +65,28 @@ class TtsConfig:
     model: str = "qwen-audio-3.0-tts-flash"
     voice: str = "longanhuan_v3.6"
     websocket_url: str | None = None       # 需要指定业务空间/地域时填
-    seats: dict[int, dict[str, float]] = field(default_factory=lambda: DEFAULT_SEAT_STYLES)
     # 音色克隆：一人一把真嗓子，慢一档但辨识度高
-    clone_default_on: bool = True
+    clone_default_on: bool = False
     clone_model: str = "cosyvoice-v2"
-    clone_voices: dict[int, str] = field(default_factory=dict)
+    clone_judge: str = ""
+    clone_pool: dict[str, list[str]] = field(default_factory=dict)
 
-    def pick(self, seat: int | None, clone: bool) -> tuple[str, str, dict[str, float]]:
-        """选模型和音色：克隆音色自带音高语速，不再叠加 seats 里的微调。"""
-        vid = self.clone_voices.get(seat if seat is not None else 0)
-        if clone and vid:
-            return self.clone_model, vid, {}
-        return self.model, self.voice, self.seats.get(seat or 0, {})
+    def pick(self, voice_key: str | None, clone: bool) -> tuple[str, str]:
+        """选模型和音色。
+
+        voice_key 是 Game 开局时发下来的槽位：法官没有槽位（None），玩家是 f0–f2 / m0–m2
+        —— 性别跟着头像走，序号保证同性别的三个人不撞嗓子。只有克隆那档分得开：
+        预置那档整个模型就一把嗓子（pitch/speech 参数它也不认，试过了）。
+        """
+        g, idx = "", 0
+        key = (voice_key or "").strip()
+        if len(key) >= 2 and key[0] in "fm" and key[1:].isdigit():
+            g, idx = key[0], int(key[1:])
+        if clone:
+            pool = (self.clone_pool.get(g) or []) if g else ([self.clone_judge] if self.clone_judge else [])
+            if pool:
+                return self.clone_model, pool[idx % len(pool)]
+        return self.model, self.voice
 
 
 @lru_cache(maxsize=1)
@@ -98,22 +100,18 @@ def load_tts_config() -> TtsConfig:
             raw = (yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}).get("tts") or {}
         except Exception as exc:
             logger.warning("读取 tts 配置失败：%s", exc)
-    seats = dict(DEFAULT_SEAT_STYLES)
-    for k, v in (raw.get("seats") or {}).items():
-        if isinstance(v, dict):
-            seats[int(k)] = {"pitch_rate": float(v.get("pitch_rate", 1.0)),
-                             "speech_rate": float(v.get("speech_rate", 1.0))}
+
     clone = raw.get("clone") or {}
-    voices = {int(k): str(v) for k, v in (clone.get("voices") or {}).items()}
+    pool = {g: [str(v) for v in (clone.get(g) or [])] for g in ("f", "m")}
     return TtsConfig(
         enabled=bool(raw.get("enabled", True)),
         model=raw.get("model") or "qwen-audio-3.0-tts-flash",
         voice=raw.get("voice") or "longanhuan_v3.6",
         websocket_url=raw.get("websocket_url"),
-        seats=seats,
-        clone_default_on=bool(clone.get("default_on", True)) and bool(voices),
+        clone_default_on=bool(clone.get("default_on", False)) and bool(pool["f"] or pool["m"]),
         clone_model=clone.get("model") or "cosyvoice-v2",
-        clone_voices=voices,
+        clone_judge=str(clone.get("judge") or ""),
+        clone_pool=pool,
     )
 
 
@@ -133,12 +131,12 @@ def available() -> bool:
     return True
 
 
-def _cache_path(model: str, voice: str, seat: int | None, text: str) -> Path:
-    key = f"{model}|{voice}|{seat}|{text}".encode("utf-8")
+def _cache_path(model: str, voice: str, text: str) -> Path:
+    key = f"{model}|{voice}|{text}".encode("utf-8")
     return CACHE_DIR / f"{hashlib.sha1(key).hexdigest()}.mp3"
 
 
-def _synth_blocking(model: str, voice: str, style: dict[str, float], text: str) -> bytes:
+def _synth_blocking(model: str, voice: str, text: str) -> bytes:
     import dashscope
     from dashscope.audio.tts_v2 import SpeechSynthesizer
 
@@ -149,9 +147,7 @@ def _synth_blocking(model: str, voice: str, style: dict[str, float], text: str) 
     last: Exception | None = None
     for attempt in range(3):                 # websocket 偶发 5s 内连不上，重试一次基本就好
         try:
-            syn = SpeechSynthesizer(model=model, voice=voice,
-                                    pitch_rate=style.get("pitch_rate", 1.0),
-                                    speech_rate=style.get("speech_rate", 1.0))
+            syn = SpeechSynthesizer(model=model, voice=voice)
             audio = syn.call(text)
             if not audio:
                 raise RuntimeError("TTS 返回空音频")
@@ -167,23 +163,27 @@ def _synth_blocking(model: str, voice: str, style: dict[str, float], text: str) 
 _locks: dict[str, asyncio.Lock] = {}
 
 
-async def synthesize(text: str, seat: int | None = None, clone: bool | None = None) -> bytes:
-    """合成一句话，命中磁盘缓存就直接返回。同一句并发请求只合成一次。"""
+async def synthesize(text: str, voice_key: str | None = None,
+                     clone: bool | None = None) -> bytes:
+    """合成一句话，命中磁盘缓存就直接返回。同一句并发请求只合成一次。
+
+    voice_key 是座位的音色槽位（f0–f2 / m0–m2，法官不传）；缺省就用法官那把。
+    """
     cfg = load_tts_config()
     text = normalize_digits(text.strip())
     if not text:
         raise ValueError("空文本")
     if clone is None:
         clone = cfg.clone_default_on
-    model, voice, style = cfg.pick(seat, clone)
-    path = _cache_path(model, voice, seat, text)
+    model, voice = cfg.pick(voice_key, clone)
+    path = _cache_path(model, voice, text)
     if path.exists():
         return path.read_bytes()
     lock = _locks.setdefault(path.name, asyncio.Lock())
     async with lock:
         if path.exists():
             return path.read_bytes()
-        audio = await asyncio.to_thread(_synth_blocking, model, voice, style, text)
+        audio = await asyncio.to_thread(_synth_blocking, model, voice, text)
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         path.write_bytes(audio)
         return audio

@@ -183,10 +183,10 @@ async def speak(body: dict[str, Any] = Body(...)) -> Response:
         raise HTTPException(400, "缺少 text")
     if not tts.available():
         raise HTTPException(503, "TTS 未启用（缺 DASHSCOPE_API_KEY / ALIYUN_BAILIAN_API_KEY 或未装 dashscope）")
-    seat = body.get("seat")
     try:
         clone = body.get("clone")
-        audio = await tts.synthesize(text[:400], int(seat) if seat is not None else None,
+        # voice 是开局时发给这个座位的音色槽位（f0–f2 / m0–m2），法官不带
+        audio = await tts.synthesize(text[:400], body.get("voice") or None,
                                      clone=None if clone is None else bool(clone))
     except Exception as exc:
         raise HTTPException(502, f"合成失败：{type(exc).__name__}: {exc}") from exc
