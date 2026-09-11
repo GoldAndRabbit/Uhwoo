@@ -183,6 +183,15 @@ function rowHTML(ev) {
   }
   if (ev.kind === "system" && ev.text.startsWith("存活玩家"))
     return `<div class="info">${esc(ev.text)}</div>`;
+  if (ev.kind === "system" && ev.text.startsWith("游戏开始")) {
+    // 开局先把 6 个人摆出来。座位清单本来就写在这条事件的文本里（agent 的上下文要用），
+    // 但 UI 上有头像就够了，把那半句摘掉，只留配置
+    const roster = [1, 2, 3, 4, 5, 6].map((seat) => face(seat)).join("");
+    const note = ev.text.replace(/共 ?6 ?名玩家：[^。]*。/, "");
+    return `<div class="row"><div class="bubble plain roster-box">
+      <div class="roster">${roster}</div>
+      <div class="roster-note">${esc(note)}</div></div></div>`;
+  }
   if (ev.kind === "speech") {
     const seat = ev.seat, role = roleOf(seat);
     const body = ev.text.replace(/^[^：]*：/, "");
