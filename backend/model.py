@@ -12,11 +12,18 @@ class Role(str, Enum):
     WOLF = "狼人"
     VILLAGER = "平民"
     SEER = "预言家"
-    GUARD = "守卫"
+    GUARD = "守卫"          # 旧存档里还有，标准局不再用
+    HUNTER = "猎人"
+    WITCH = "女巫"
 
     @property
     def camp(self) -> str:
         return "狼人阵营" if self is Role.WOLF else "好人阵营"
+
+    @property
+    def is_god(self) -> bool:
+        """神职。屠边判定要分「民」和「神」两边，靠的就是这个。"""
+        return self in (Role.SEER, Role.GUARD, Role.HUNTER, Role.WITCH)
 
 
 # 座位头像：frontend/img/avatars/<key>.png，6 女（f1–f6）+ 6 男（m1–m6），
@@ -26,8 +33,24 @@ FACES_F: list[str] = [f"f{i}" for i in range(1, 7)]
 FACES_M: list[str] = [f"m{i}" for i in range(1, 13)]      # m1–m6 欧美脸，m7–m12 韩式
 AVATARS: list[str] = FACES_F + FACES_M
 
-# 6 人局：2 狼 2 民 1 预言家 1 守卫
-SETUP: list[Role] = [Role.WOLF, Role.WOLF, Role.VILLAGER, Role.VILLAGER, Role.SEER, Role.GUARD]
+# 对局配置。胜负都是**屠边**：狼人把「民」或「神」其中一边杀光就赢，不用杀完所有人。
+SETUPS: dict[str, dict[str, Any]] = {
+    "6": {
+        "name": "6 人标准局",
+        "desc": "2 狼人、2 平民、1 预言家、1 猎人",
+        "roles": [Role.WOLF, Role.WOLF, Role.VILLAGER, Role.VILLAGER, Role.SEER, Role.HUNTER],
+    },
+    "9": {
+        "name": "9 人标准局",
+        "desc": "3 狼人、3 平民、1 预言家、1 猎人、1 女巫",
+        "roles": [Role.WOLF, Role.WOLF, Role.WOLF,
+                  Role.VILLAGER, Role.VILLAGER, Role.VILLAGER,
+                  Role.SEER, Role.HUNTER, Role.WITCH],
+    },
+}
+DEFAULT_SETUP = "6"
+
+SETUP: list[Role] = SETUPS[DEFAULT_SETUP]["roles"]      # 旧引用还指着这个名字
 
 
 @dataclass

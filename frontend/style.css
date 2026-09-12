@@ -1,8 +1,19 @@
 * { box-sizing: border-box; }
 :root{
-  --bg:#f6f5f3; --panel:#fff; --line:#e6e3dd; --text:#26241f; --dim:#8b867c;
-  --wolf-bg:#fbe4e4; --wolf-fg:#a52a2a; --seer-bg:#dfeaf7; --seer-fg:#1f5b9a;
-  --guard-bg:#e2efe4; --guard-fg:#2c6b41; --vill-bg:#efece6; --vill-fg:#6b6558;
+  /* 深紫夜色：牌桌是晚上，底色就别装白天了。
+     身份色在暗底上要反过来 —— 底用半透明的深色，字用亮色，否则一片糊 */
+  --bg:#160f28; --panel:#20183a; --line:#33294f; --text:#ece8f6; --dim:#9c93bb;
+  --raise:#291f47;                      /* 比面板再亮一档，用于气泡、卡片 */
+  --wolf-bg:rgba(190,55,55,.26); --wolf-fg:#e8807f;
+  --seer-bg:rgba(70,140,225,.20); --seer-fg:#8fc2fb;
+  --guard-bg:rgba(150,105,60,.22); --guard-fg:#e2b88c;
+  --vill-bg:rgba(230,225,245,.10); --vill-fg:#c0b8d6;
+  --hunter-bg:rgba(190,110,50,.22); --hunter-fg:#f2b184;
+  --witch-bg:rgba(150,105,200,.22); --witch-fg:#d3aaf5;
+  /* 整块上色的卡片（发言人列、座位、身份卡）在暗底上要用深色块配亮字，
+     直接拿上面那些亮色当背景会刺眼 */
+  --wolf-solid:#7e2f2f; --seer-solid:#2c5182; --guard-solid:#5e4529;
+  --vill-solid:#433c59; --hunter-solid:#70411f; --witch-solid:#523c76; --judge-solid:#4b3f79;
 }
 html,body{height:100%;}
 body{
@@ -13,15 +24,52 @@ button{font:inherit;cursor:pointer;}
 
      border-right:1px solid var(--line);}
 .tab.active{background:var(--panel);color:var(--text);}
-.tab-badge{background:#e5e2db;border-radius:8px;padding:0 6px;font-size:11px;}
+.tab-badge{background:#33294f;border-radius:8px;padding:0 6px;font-size:11px;}
 .tab-fill{flex:1;}
 .tab-note{display:flex;align-items:center;padding:0 14px;font-size:11px;color:var(--dim);}
 
 .app{display:grid;grid-template-columns:268px 400px 1fr;height:100vh;}
+/* ---------- Play 模式：牌桌视图 ---------- */
+/* 控制项收成顶上一条，下面整块留给牌桌：左右两列座位夹着中间的事件流 */
+body.no-debug .app{grid-template-columns:1fr;grid-template-rows:auto 1fr;}
+body.no-debug .center,
+body.no-debug .sidebar .sec-head,
+body.no-debug #history{display:none;}
+/* 开局页：控制项摆成居中一张卡；牌桌页只留返回按钮 */
+body.no-debug .sidebar{border-right:none;padding:26px 18px 40px;max-width:520px;margin:0 auto;
+                       width:100%;}
+body.no-debug .sidebar .field{margin-bottom:12px;}
+body.no-debug .sidebar .btn{padding:11px;}
+body.no-debug.screen-table .sidebar{display:none;}
+body.no-debug:not(.screen-table) .right{display:none;}
+body.no-debug .right{padding:0 14px 60px;}
+.backbtn{border:1px solid var(--line);background:var(--panel);border-radius:8px;
+         padding:4px 10px;font-size:12px;color:var(--dim);margin-right:10px;}
+.backbtn:hover{background:var(--raise);}
+body:not(.no-debug) .backbtn,
+body.no-debug:not(.screen-table) .backbtn{display:none;}
+
+.table{display:grid;grid-template-columns:112px minmax(0,1fr) 112px;gap:12px;align-items:start;}
+.seats{display:flex;flex-direction:column;gap:8px;position:sticky;top:52px;}
+.seats:empty{display:none;}
+body:not(.no-debug) .table{grid-template-columns:1fr;}
+
+.seat{width:100%;justify-content:flex-start;position:relative;}
+.seat.unknown{background:#4a4363;}
+.seat .face{width:44px;height:44px;border-radius:10px;}
+.seat.me{box-shadow:0 0 0 2px #e0573f;}
+.seat.dead{opacity:.42;}
+.seat-x{position:absolute;top:-5px;right:-4px;background:#0f0a1e;color:#cfc7e6;
+        border:1px solid var(--line);border-radius:6px;padding:0 5px;font-size:9.5px;}
+@media (max-width:860px){
+  .table{grid-template-columns:72px minmax(0,1fr) 72px;gap:6px;}
+  .seat .face{width:38px;height:38px;border-radius:9px;}
+  .seat .who-r{width:auto;font-size:10px;}
+}
 /* iOS Safari 的 100vh 含地址栏高度，会把内容顶到可视区外面，用 dvh 修正 */
 @supports (height: 100dvh){ .app{height:100dvh;} }
 .col{overflow-y:auto;min-width:0;}
-.col::-webkit-scrollbar{width:8px;} .col::-webkit-scrollbar-thumb{background:#d8d4cc;border-radius:4px;}
+.col::-webkit-scrollbar{width:8px;} .col::-webkit-scrollbar-thumb{background:#3e3360;border-radius:4px;}
 
 /* ---------- 左栏 ---------- */
 .sidebar{background:var(--panel);border-right:1px solid var(--line);padding:14px 12px 30px;}
@@ -30,21 +78,21 @@ button{font:inherit;cursor:pointer;}
 .field select{display:block;width:100%;margin-top:4px;padding:7px 8px;border:1px solid var(--line);
               border-radius:8px;background:var(--panel);color:var(--text);font:inherit;}
 .check{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);margin:0 0 10px;cursor:pointer;}
-.check input{accent-color:#c0392b;}
+.check input{accent-color:#e0573f;}
 .btn{width:100%;border-radius:8px;padding:8px 10px;margin-bottom:8px;border:1px solid var(--line);
      background:var(--panel);color:var(--text);}
-.btn.primary{background:#c0392b;border-color:#c0392b;color:#fff;font-weight:600;}
-.btn.primary:disabled{background:#dcd9d3;border-color:#dcd9d3;color:#fff;cursor:not-allowed;}
-.btn.ghost{color:#a33b2c;}
-.btn.ghost:disabled{color:#bbb6ad;cursor:not-allowed;}
+.btn.primary{background:#e0573f;border-color:#e0573f;color:#fff;font-weight:600;}
+.btn.primary:disabled{background:#3a2f57;border-color:#3a2f57;color:#fff;cursor:not-allowed;}
+.btn.ghost{color:#ef8f7a;}
+.btn.ghost:disabled{color:#5b5177;cursor:not-allowed;}
 .btn.dashed{border-style:dashed;color:var(--dim);}
 .sec-head{display:flex;align-items:center;gap:6px;margin:16px 0 8px;font-size:12px;color:var(--dim);}
 .sec-right{margin-left:auto;font-size:11px;}
 .caret{font-size:9px;}
 .prow{display:flex;align-items:center;gap:7px;padding:8px 10px;margin-bottom:6px;border:1px solid var(--line);
-      border-radius:8px;background:#fcfbf9;cursor:pointer;min-width:0;}
-.prow:hover{background:#f4f2ee;}
-.prow.active{border-color:#8fb99b;box-shadow:inset 3px 0 0 #4c8c62;}
+      border-radius:8px;background:var(--raise);cursor:pointer;min-width:0;}
+.prow:hover{background:var(--raise);}
+.prow.active{border-color:#5abe82;box-shadow:inset 3px 0 0 #4c8c62;}
 .prow.dead{opacity:.5;}
 .prow.judge{cursor:default;color:var(--dim);}          /* 法官不参与筛选，点不动 */
 .prow.judge:hover{background:var(--panel);}
@@ -57,94 +105,171 @@ button{font:inherit;cursor:pointer;}
 .r-预言家{background:var(--seer-bg);color:var(--seer-fg);}
 .r-守卫{background:var(--guard-bg);color:var(--guard-fg);}
 .r-平民{background:var(--vill-bg);color:var(--vill-fg);}
-.judge{background:#e8e4f0;color:#4b3f6b;}
+.r-猎人{background:var(--hunter-bg);color:var(--hunter-fg);}
+.r-女巫{background:var(--witch-bg);color:var(--witch-fg);}
+.judge{background:#e8e4f0;color:#cbb8f5;}
 .play{flex:0 0 auto;margin-top:6px;width:26px;height:26px;border-radius:50%;
-      border:1px solid var(--line);background:var(--panel);color:#8b867c;
+      border:1px solid var(--line);background:var(--panel);color:var(--dim);
       display:flex;align-items:center;justify-content:center;padding:0;}
-.play:hover{color:#c0392b;border-color:#e0c4c0;}
-.play.on{color:#c0392b;border-color:#e0c4c0;background:#fdf3f2;}
+.play:hover{color:#e0573f;border-color:rgba(200,60,60,.35);}
+.play.on{color:#e0573f;border-color:rgba(200,60,60,.35);background:rgba(200,60,60,.13);}
 .wave{display:flex;align-items:center;gap:2px;height:12px;}
 .wave b{width:2px;height:4px;background:currentColor;border-radius:1px;
         animation:wv .9s ease-in-out infinite;}
 .wave b:nth-child(2){animation-delay:.15s;}
 .wave b:nth-child(3){animation-delay:.3s;}
 @keyframes wv{0%,100%{height:4px}50%{height:12px}}
-.bubble.judgeline{background:#f4f2f8;color:#4b3f6b;}
-/* 开局的六连号码牌 */
-.roster-box{width:100%;}
+.bubble.judgeline{background:rgba(150,130,225,.20);color:#d9cdfb;border-color:rgba(170,150,240,.34);}
+/* 结算的身份表：一行一个人，左边座位、右边身份 */
+.revealcard{width:100%;}
+.rvhead{font-weight:600;margin-bottom:9px;}
+.rvgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;}
+.rvrow{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);
+       border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:5px 9px 5px 5px;}
+.rvseat{font-weight:600;font-size:12.5px;}
+.roleimg{width:34px;height:34px;border-radius:8px;object-fit:cover;margin-left:auto;
+         border:1px solid var(--line);}
+.rvrow .rtag{border-radius:5px;padding:1px 7px;font-size:11.5px;white-space:nowrap;}
+
+/* 开局的六连号码牌，右边挂一张「你是几号、什么身份」的卡 */
+.roster-box{width:100%;display:flex;gap:16px;align-items:flex-start;}
+.roster-main{flex:1;min-width:0;}
+.idcard{flex:0 0 auto;display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:10px;
+        background:var(--panel);border:1px solid var(--line);font-size:12.5px;line-height:1.5;}
+.idcard-t{white-space:nowrap;}
+.idcard-s{font-size:11px;color:var(--dim);}
 .roster{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin-bottom:9px;}
-.roster-split{width:1px;background:rgba(38,36,31,.16);margin:2px 3px;flex:0 0 auto;}
+.roster-split{width:1px;background:rgba(255,255,255,.14);margin:2px 3px;flex:0 0 auto;}
 .roster-note{font-size:12px;color:var(--dim);}
 
 /* ---------- 玩家头像：号码压在下半部当角标 ---------- */
 .face{position:relative;display:inline-block;flex:0 0 auto;width:58px;height:58px;overflow:hidden;
-      border-radius:12px;background:#efece6;border:1px solid var(--line);line-height:0;}
+      border-radius:12px;background:#2c2248;border:1px solid var(--line);line-height:0;}
 .face img,.face-blank{display:block;width:100%;height:100%;object-fit:cover;}
 /* 角标压在头像下沿，底下垫一层由深到透的渐变，浅色衣服上也认得出字 */
-.face-no{position:absolute;left:0;right:0;bottom:0;padding:7px 0 2px;text-align:center;
-         font-size:10.5px;font-weight:600;line-height:1.2;color:#fff;letter-spacing:.5px;
-         background:linear-gradient(to top,rgba(28,24,20,.74),rgba(28,24,20,0));}
+/* 号码压在最底下：往上占太多会糊住人物的下巴 */
+.face-no{position:absolute;left:0;right:0;bottom:0;padding:5px 0 1px;text-align:center;
+         font-size:10.5px;font-weight:600;line-height:1.15;color:#fff;letter-spacing:.5px;
+         background:linear-gradient(to top,rgba(28,24,20,.78) 40%,rgba(28,24,20,0));}
 .face.md{width:38px;height:38px;border-radius:10px;}
 .face.sm{width:30px;height:30px;border-radius:8px;}
-.face.md .face-no{font-size:10px;padding:5px 0 1px;}
-.face.sm .face-no{font-size:9.5px;padding:4px 0 0;}
+.face.md .face-no{font-size:10px;padding:4px 0 0;}
+.face.sm .face-no{font-size:9.5px;padding:3px 0 0;}
 .face.sm .face-no i{display:none;}          /* 30px 上塞不下「号」字，只留数字 */
 .face .face-no{font-size:10.5px;}           /* 「法官」两个字比号码宽，统一收一点 */
 .face-no i{font-style:normal;}              /* <i> 只用来在小尺寸下藏「号」字，不是斜体 */
 /* 正在朗读的那个人：边框呼吸。不做缩放 —— 列表里一晃会把整行推得动来动去。
    身份揭示后呼吸灯跟着身份的颜色走，没揭示就用中性的品牌红 */
-.face{--breathe:#c0392b;--breathe-a:rgba(192,57,43,.46);}
-.face.g-狼人{--breathe:var(--wolf-fg);--breathe-a:rgba(165,42,42,.46);}
-.face.g-预言家{--breathe:var(--seer-fg);--breathe-a:rgba(31,91,154,.46);}
-.face.g-守卫{--breathe:var(--guard-fg);--breathe-a:rgba(44,107,65,.46);}
-.face.g-平民{--breathe:var(--vill-fg);--breathe-a:rgba(107,101,88,.46);}
-.face.speaking{border-color:var(--breathe);animation:face-breathe 3.6s ease-in-out infinite;}
-@keyframes face-breathe{
-  0%,100%{box-shadow:0 0 0 2px var(--breathe),0 0 0 3px var(--breathe-a);}
-  50%    {box-shadow:0 0 0 2px var(--breathe),0 0 0 20px transparent;}
-}
-@media (prefers-reduced-motion: reduce){
-  .face.speaking{animation:none;box-shadow:0 0 0 2px var(--breathe);}
-}
+/* 正在朗读：一段绿色的粗边沿着四周顺时针跑。
+   做法是把头像本身垫上 3px 内边距，底下铺一张会转的 conic 渐变 —— 图片盖住中间，
+   露出来的一圈就是跑动的边。@property 是为了让角度能被动画插值（不支持的浏览器
+   拿到的是一圈静止的绿边，不会坏）。 */
+@property --ang{syntax:"<angle>";initial-value:0deg;inherits:false;}
+/* 一整块实心深绿沿着边框转圈（硬边界，不做渐变过渡，看着就是一条色块在跑），
+   其余部分保持普通边框色 */
+.face.speaking{border-color:transparent;padding:6px;
+               background:conic-gradient(from var(--ang),
+                 #14512c 0deg 95deg, #3a2f57 95deg 360deg);
+               animation:face-run 1.1s linear infinite;}
+@keyframes face-run{to{--ang:360deg;}}
+@media (prefers-reduced-motion: reduce){ .face.speaking{animation:none;} }
 @media (max-width:860px){ .face{width:46px;height:46px;border-radius:10px;} }
-/* 头像在上、身份在下，竖着一列 */
-.who{display:flex;flex-direction:column;align-items:center;gap:4px;flex:0 0 auto;}
-.who .badge{white-space:nowrap;}
+/* 发言人那一列：横着一张卡，左脸右身份，配色和中栏那六张一致 */
+.who{display:flex;align-items:center;gap:7px;flex:0 0 auto;padding:4px 8px 4px 4px;
+     border-radius:12px;background:#4a4363;align-self:flex-start;}
+.who .face{width:44px;height:44px;border-radius:10px;}
+.who .face .face-no{font-size:10px;padding:5px 0 1px;}
+.who.g-狼人{background:var(--wolf-solid);}
+.who.g-预言家{background:var(--seer-solid);}
+.who.g-守卫{background:var(--guard-solid);}
+.who.g-平民{background:var(--vill-solid);}
+.who.g-猎人{background:var(--hunter-solid);}
+.who.g-女巫{background:var(--witch-solid);}
+.who.judge{background:var(--judge-solid);}
+.who.judge .face-no{display:none;}          /* 右边已经写着「法官」了 */
+/* 定宽：不然「预言家」比「狼人」宽一截，一列卡片参差不齐 */
+.who-r{width:40px;text-align:center;color:#fff;font-size:12.5px;font-weight:600;
+       letter-spacing:0;white-space:nowrap;}
 .history .hrow{display:flex;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;
-               margin-bottom:6px;background:#fcfbf9;cursor:pointer;font-size:12px;}
-.history .hrow:hover{background:#f4f2ee;}
+               margin-bottom:6px;background:var(--raise);cursor:pointer;font-size:12px;}
+.history .hrow:hover{background:var(--raise);}
 .history .hwin{margin-left:auto;font-size:11px;color:var(--dim);}
-.foot{margin-top:18px;font-size:11px;color:#b3ada2;}
 
 /* ---------- 中栏 ---------- */
-.center{background:#fbfaf8;border-right:1px solid var(--line);padding:0 12px 40px;}
-.col-head{position:sticky;top:0;z-index:2;background:#fbfaf8;display:flex;align-items:center;
+.center{background:var(--raise);border-right:1px solid var(--line);padding:0 12px 40px;}
+.col-head{position:sticky;top:0;z-index:2;background:var(--raise);display:flex;align-items:center;
           padding:12px 2px 10px;font-weight:600;border-bottom:1px solid var(--line);}
 .col-head-right{margin-left:auto;font-weight:400;font-size:12px;color:var(--dim);}
+/* 中栏顶上这两块共用一档头像尺寸，法官那条跟下面六张卡对齐 */
+.sysrow .face,.ctxface .face{width:48px;height:48px;border-radius:11px;}
+.sysrow .face .face-no,.ctxface .face .face-no{font-size:10.5px;padding:5px 0 0;}
+/* 法官卡占一列、系统全局状态占两列，正好压着下面那排卡的网格线 */
+.sysrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 14px 0;}
+.sysrow:empty{display:none;}
+.ctxface.judge{background:var(--judge-solid);}
+.ctxface.judge .face-no{display:none;}      /* 右边已经写着「法官」了，角标就别重复 */
+.sysline{grid-column:span 2;display:flex;align-items:center;gap:9px;width:100%;padding:7px 12px;
+         border-radius:12px;border:1px solid var(--line);background:var(--raise);font:inherit;
+         font-size:12.5px;text-align:left;}
+.sysline:hover{background:var(--raise);}
+.sysline.active{border-color:#5abe82;background:rgba(90,190,130,.14);}
+.sysline-t{font-weight:600;color:var(--text);}
+.sysline-n{margin-left:auto;font-size:11px;color:var(--dim);}
+.ctxfaces{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;
+          padding:10px 14px;border-bottom:1px solid var(--line);}
+.ctxfaces:empty{display:none;}
+/* 一个人一张小卡：左边脸，右边身份 —— 整张卡按身份上色，身份用白字压在上面 */
+/* 左边挤紧一点、文字左对齐：不然「预言家」三个字会被挤成「预…」 */
+.ctxface{display:flex;align-items:center;gap:6px;padding:4px 5px 4px 4px;border-radius:12px;
+         border:1px solid transparent;background:#4a4363;min-width:0;}
+.ctxface.g-狼人{background:var(--wolf-solid);}
+.ctxface.g-预言家{background:var(--seer-solid);}
+.ctxface.g-守卫{background:var(--guard-solid);}
+.ctxface.g-平民{background:var(--vill-solid);}
+.ctxface.g-猎人{background:var(--hunter-solid);}
+.ctxface.g-女巫{background:var(--witch-solid);}
+.ctxface.unknown{background:#4a4363;}
+.ctxface:hover{filter:brightness(1.08);}
+.ctxface.active{border-color:var(--text);box-shadow:0 0 0 2px rgba(255,255,255,.16);}
+.ctxface.dead{opacity:.42;}
+.ctxface-r{flex:1;min-width:0;font-size:13.5px;font-weight:600;color:#fff;text-align:left;
+           letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.sysblk{margin:10px 14px 0;border:1px solid var(--line);border-radius:10px;background:var(--raise);
+        padding:8px 12px;font-size:12px;}
+.sysblk[hidden]{display:none;}
+.sysblk>summary{cursor:pointer;color:var(--dim);}
+/* 注入的人设：开局摇的那四条，单独列出来，别埋在几百字的常驻段里 */
+.persona{display:flex;flex-direction:column;gap:4px;margin:8px 0 6px;}
+.persona span{display:block;font-size:11.5px;color:#d9cfae;background:#f1efe9;border-radius:7px;
+              padding:4px 8px;}
+.persona i{font-style:normal;color:var(--dim);margin-right:6px;}
+
 .filter-bar[hidden]{display:none;}
 .filter-bar{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--dim);padding:8px 2px;}
-.filter-bar button{border:none;background:none;color:#1f5b9a;text-decoration:underline;padding:0;}
+.filter-bar button{border:none;background:none;color:var(--seer-fg);text-decoration:underline;padding:0;}
 .calls{padding-top:10px;}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden;}
-.card-head{display:flex;align-items:center;padding:9px 12px;border-bottom:1px solid #f0eee9;}
+.card-head{display:flex;align-items:center;padding:9px 12px;border-bottom:1px solid #2c2248;}
 .card-head b{font-weight:600;}
 .card-head .ctx{margin-left:auto;font-size:11px;color:var(--dim);}
 .card-body{padding:8px 12px 12px;}
-.card-title{font-size:12.5px;color:#4a463e;margin-bottom:8px;line-height:1.7;}
-details{border-top:1px solid #f2f0ec;padding:6px 0;}
+.card-title{font-size:12.5px;color:var(--text);margin-bottom:8px;line-height:1.7;}
+details{border-top:1px solid var(--raise);padding:6px 0;}
 details summary{cursor:pointer;font-size:11.5px;color:var(--dim);list-style:none;}
 details summary::-webkit-details-marker{display:none;}
 details summary::before{content:"▸ ";}
 details[open] summary::before{content:"▾ ";}
-.blk{margin-top:6px;max-height:190px;overflow:auto;background:#fbfaf7;border:1px solid #efece6;
-     border-radius:6px;padding:8px 10px;font-size:11.5px;white-space:pre-wrap;color:#4a463e;
+.blk{margin-top:6px;max-height:190px;overflow:auto;background:#1a1430;border:1px solid #33294f;
+     border-radius:6px;padding:8px 10px;font-size:11.5px;white-space:pre-wrap;color:#c7bfe0;
      font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.75;}
-.out{margin-top:8px;border-top:1px solid #f2f0ec;padding-top:8px;}
+.out{margin-top:8px;border-top:1px solid var(--raise);padding-top:8px;}
 .out .k{font-size:11px;color:var(--dim);}
-.out .think{font-size:12px;color:#6b6558;background:#f7f5f1;border-radius:6px;padding:6px 9px;margin:4px 0;}
-.out .act{font-size:12.5px;}
-.pill{display:inline-block;background:#efece6;border-radius:5px;padding:0 6px;font-size:11px;color:#6b6558;}
-.mock{color:#b08a2e;}
+.out .think{font-size:12px;color:var(--dim);background:#1f1839;border-radius:6px;padding:6px 9px;margin:4px 0;}
+.out .act{font-size:12.5px;background:var(--raise);border:1px solid var(--line);border-radius:8px;
+          padding:7px 10px;margin-top:4px;}
+.pill{display:inline-block;background:#2c2248;border-radius:5px;padding:0 6px;font-size:11px;color:var(--dim);}
+.mock{color:#e0b95c;}
 
 /* ---------- 右栏 ---------- */
 .right{background:var(--panel);padding:0 18px 60px;position:relative;}
@@ -153,7 +278,14 @@ details[open] summary::before{content:"▾ ";}
 .badge{flex:0 0 auto;border-radius:6px;padding:2px 8px;font-size:11.5px;white-space:nowrap;margin-top:2px;}
 /* 正文后面的注脚（可见范围之类）：小一号、淡一点，跟在句子后面不换行 */
 .aside{margin-left:6px;font-size:11px;opacity:.62;white-space:nowrap;}
-.bubble{background:#f4f2ee;border-radius:10px;padding:7px 12px;max-width:860px;}
+/* 查验结果 / 刀口：这一夜最要紧的信息，标出来 */
+.verdict{font-weight:700;border-radius:5px;padding:0 3px;}
+.verdict.good{color:#5abe82;background:rgba(90,190,130,.18);}
+.verdict.bad{color:var(--wolf-fg);background:rgba(200,60,60,.20);}
+.verdict.kill{color:#ff8d8d;background:rgba(200,60,60,.22);font-weight:700;}
+/* 每个气泡都描一道比底色深一档的细边：段落底色一上来，纯靠填充色分不清边界 */
+.bubble{background:var(--raise);border:1px solid rgba(255,255,255,.10);border-radius:10px;
+        padding:7px 12px;max-width:860px;}
 .bubble.revealing{min-height:1.65em;}
 .ck{display:none;}
 .ck.on{display:inline;animation:ckIn .34s cubic-bezier(.4,0,.2,1) both;}
@@ -161,36 +293,58 @@ details[open] summary::before{content:"▾ ";}
 .bubble.say{cursor:pointer;}
 .bubble.say:hover{filter:brightness(.97);}
 /* 身份揭示时（模拟模式全程、单人/多人模式在结束后）气泡跟着身份上色 */
-.bubble.r-狼人{background:var(--wolf-bg);color:var(--wolf-fg);}
-.bubble.r-预言家{background:var(--seer-bg);color:var(--seer-fg);}
-.bubble.r-守卫{background:var(--guard-bg);color:var(--guard-fg);}
-.bubble.r-平民{background:var(--vill-bg);color:var(--vill-fg);}
-.bubble.plain{background:#f8f7f4;color:#6b6558;font-size:12px;}
-.bubble.result{background:#f1f5f0;color:#33553c;}
-.bubble.wolfnight{background:#fdf3f2;}
+.bubble.r-狼人{background:var(--wolf-bg);color:var(--wolf-fg);border-color:rgba(200,60,60,.35);}
+.bubble.r-预言家{background:var(--seer-bg);color:var(--seer-fg);border-color:rgba(70,140,225,.35);}
+.bubble.r-守卫{background:var(--guard-bg);color:var(--guard-fg);border-color:rgba(150,105,60,.35);}
+.bubble.r-平民{background:var(--vill-bg);color:var(--vill-fg);border-color:rgba(230,225,245,.16);}
+.bubble.r-猎人{background:var(--hunter-bg);color:var(--hunter-fg);border-color:rgba(190,110,50,.35);}
+.bubble.r-女巫{background:var(--witch-bg);color:var(--witch-fg);border-color:rgba(150,105,200,.35);}
+.bubble.plain{background:var(--raise);color:var(--dim);font-size:12px;}
+.bubble.result{background:rgba(90,190,130,.12);color:#a9e3c0;border-color:rgba(90,190,130,.3);}
+.bubble.wolfnight{background:rgba(200,60,60,.13);border-color:#f2d9d6;}
 /* 一天/一夜整段包在一个底色块里：夜里冷灰、白天米黄。
    分隔条自己不再上色（否则底色套底色），只留一根细线压住段首 */
-.seg{border-radius:14px;padding:2px 14px 10px;margin:0 0 14px;background:#eeecf2;}
-.seg.day{background:#f8f2e4;}
+.seg{border-radius:14px;padding:2px 14px 10px;margin:0 0 14px;background:rgba(120,100,190,.13);}
+.seg.day{background:rgba(210,170,90,.12);}
 .seg .bubble.plain,.seg .bubble.say:not([class*="r-"]),.seg .bubble:not([class*="r-"]):not(.judgeline):not(.result){
-  background:rgba(255,255,255,.72);}      /* 没有身份色的气泡在底色上要提亮，否则糊成一片 */
+  background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.09);}
+                                          /* 没有身份色的气泡在底色上要提亮，否则糊成一片 */
 .phase{display:flex;align-items:baseline;gap:12px;margin:6px 0 10px;padding:8px 2px;
-       border-bottom:1px solid rgba(38,36,31,.09);}
+       border-bottom:1px solid rgba(255,255,255,.08);}
 .phase h2{margin:0;font-size:17px;font-weight:600;}
 .phase .note{margin-left:auto;font-size:12px;color:var(--dim);}
-.info{display:inline-block;background:#f4f2ee;border-radius:8px;padding:4px 12px;font-size:12px;
-      color:#6b6558;margin-bottom:10px;}
-.vote{font-size:12px;color:#6b6558;}
+.info{display:inline-block;background:var(--raise);border-radius:8px;padding:4px 12px;font-size:12px;
+      color:var(--dim);margin-bottom:10px;}
+.vote{font-size:12px;color:var(--dim);}
+/* 票型卡：居中、米色。一人一条太碎，归堆之后一眼看得出谁站谁 */
+.votecard{margin:10px auto;width:fit-content;max-width:100%;background:#2e2647;
+          border:1px solid rgba(230,215,180,.22);border-radius:12px;padding:9px 13px 11px;}
+.votecard-h{font-size:11.5px;color:#b6a77f;margin-bottom:7px;letter-spacing:.5px;}
+.votel{display:flex;align-items:center;gap:9px;padding:6px 0;font-size:13px;
+       border-top:1px solid rgba(255,255,255,.10);}
+.votecnt{margin-left:14px;}
+.votel:first-of-type{border-top:none;}
+/* 投票人、箭头、目标要挨在一起：votefrom 别撑满整行，把票数推到右边就行 */
+.votefrom{display:flex;flex-wrap:wrap;gap:5px;min-width:0;}
+.voteto{display:flex;}
+.votecnt{margin-left:auto;}
+.votearrow{color:#b6a77f;}
+.voteto{font-weight:600;}
+.votecnt{font-size:11px;color:#b6a77f;white-space:nowrap;margin-left:auto;}
+/* 法官那句「投票结果…」收在卡片底部，不再单独占一行气泡 */
+.votecard-foot{margin:9px 0 0;padding-top:9px;border-top:1px solid rgba(255,255,255,.10);}
+.votecard-foot .bubble{line-height:1.7;}
+.votecard-foot b{font-weight:600;}
 .runbar[hidden]{display:none;}
 .runbar{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;padding:10px 0 14px;
-        background:var(--panel);box-shadow:0 -8px 12px -6px rgba(255,255,255,.95),0 -1px 0 var(--line);
+        background:var(--panel);box-shadow:0 -8px 12px -6px rgba(32,24,58,.95),0 -1px 0 var(--line);
         font-size:12px;color:var(--dim);}
 .dots i{display:inline-block;width:4px;height:4px;border-radius:50%;background:#c4bfb5;margin-right:3px;
         animation:blink 1.2s infinite;}
 .dots i:nth-child(2){animation-delay:.2s;} .dots i:nth-child(3){animation-delay:.4s;}
 @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
 .runbar.done .dots{display:none;}
-.empty{color:#b3ada2;font-size:12px;padding:24px 0;}
+.empty{color:var(--dim);font-size:12px;padding:24px 0;}
 
 /* ---------- 事件流顶栏：身份 + 停止/重开 ---------- */
 .mebar{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:8px;
@@ -202,8 +356,8 @@ details[open] summary::before{content:"▾ ";}
 .mebar-btns{margin-left:auto;display:flex;gap:6px;}
 .mebar-btns button{border:1px solid var(--line);background:var(--panel);border-radius:7px;
                    padding:5px 12px;color:var(--text);font-size:12px;}
-.mebar-btns button:disabled{color:#bbb6ad;}
-#barStop{color:#a33b2c;}
+.mebar-btns button:disabled{color:#5b5177;}
+#barStop{color:#ef8f7a;}
 
 /* ---------- 多人房间 ---------- */
 .lobby[hidden]{display:none;}
@@ -215,33 +369,33 @@ details[open] summary::before{content:"▾ ";}
 .lobby .row2 input{margin:0;flex:1 1 auto;min-width:0;}   /* 不给 min-width:0 会把侧栏撑宽 */
 .lobby .row2 .btn{margin:0;white-space:nowrap;width:auto;flex:0 0 auto;padding:8px 14px;}
 .roomcode{background:#fbe9e7;border:1px solid #f0cfca;border-radius:8px;padding:8px 10px;
-          margin:8px 0 6px;color:#a33b2c;font-size:12.5px;}
+          margin:8px 0 6px;color:#ef8f7a;font-size:12.5px;}
 .roomcode b{font-size:22px;letter-spacing:3px;margin:0 6px;font-variant-numeric:tabular-nums;}
 .roomcode span{display:block;font-size:11px;color:#8b5b52;margin-top:2px;word-break:break-all;}
 .members{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
-.members span{background:#f4f2ee;border-radius:6px;padding:3px 8px;font-size:11.5px;
+.members span{background:var(--raise);border-radius:6px;padding:3px 8px;font-size:11.5px;
               white-space:nowrap;}
-.members span.host::after{content:" 房主";color:#a33b2c;}
-.members span.me{background:#e2efe4;color:#2c6b41;}
-.members .kick{font-style:normal;margin-left:5px;color:#a33b2c;cursor:pointer;opacity:.55;}
+.members span.host::after{content:" 房主";color:#ef8f7a;}
+.members span.me{background:rgba(90,190,130,.16);color:#5abe82;}
+.members .kick{font-style:normal;margin-left:5px;color:#ef8f7a;cursor:pointer;opacity:.55;}
 .members .kick:hover{opacity:1;}
 
 /* ---------- 单人模式 ---------- */
 .ask{position:sticky;bottom:0;z-index:5;background:var(--panel);border-top:1px solid var(--line);
-     box-shadow:0 -10px 14px -8px rgba(0,0,0,.06);padding:10px 0 12px;}
+     box-shadow:0 -10px 14px -8px rgba(0,0,0,.35);padding:10px 0 12px;}
 .ask[hidden]{display:none;}
 .ask-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12.5px;}
 .ask-left{margin-left:auto;font-size:11.5px;color:var(--dim);}
-.ask-q{font-size:12px;color:#6b6558;margin-bottom:8px;line-height:1.7;white-space:pre-wrap;}
+.ask-q{font-size:12px;color:var(--dim);margin-bottom:8px;line-height:1.7;white-space:pre-wrap;}
 .seats{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
 .seats button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 14px;}
-.seats button.on{border-color:#c0392b;background:#fbe4e4;color:#a52a2a;font-weight:600;}
+.seats button.on{border-color:#e0573f;background:#fbe4e4;color:var(--wolf-fg);font-weight:600;}
 .ask textarea,.ask input[type=text]{width:100%;border:1px solid var(--line);border-radius:8px;
      padding:8px 10px;font:inherit;background:var(--panel);color:var(--text);resize:vertical;}
 .ask textarea{min-height:64px;}
 .ask .send{margin-top:8px;width:100%;border:none;border-radius:8px;padding:10px;
-     background:#c0392b;color:#fff;font-weight:600;}
-.ask .send:disabled{background:#dcd9d3;}
+     background:#e0573f;color:#fff;font-weight:600;}
+.ask .send:disabled{background:#3a2f57;}
 
 /* ---------- 移动端：单栏 + 底部三个页签 ---------- */
 .mobnav{display:none;}
@@ -269,7 +423,7 @@ details[open] summary::before{content:"▾ ";}
   .badge,.only{font-size:11px;}
   .phase h2{font-size:16px;}
   .phase .note{display:none;}
-  .blk{max-height:150px;font-size:11px;}
+  .blk{color:var(--text);max-height:150px;font-size:11px;}
   .prow{padding:10px;}
   .btn{padding:11px 10px;}          /* 手指点得中 */
   .field select{padding:10px 8px;}
@@ -286,9 +440,9 @@ details[open] summary::before{content:"▾ ";}
     flex:1;border:none;background:none;color:var(--dim);font-size:13px;
     display:flex;align-items:center;justify-content:center;gap:5px;
   }
-  .mobnav button.active{color:#c0392b;font-weight:600;box-shadow:inset 0 -2px 0 #c0392b;}
-  .mobnav .n{background:#efece6;border-radius:8px;padding:0 6px;font-size:11px;color:#6b6558;}
-  .mobnav button.active .n{background:#fbe4e4;color:#a52a2a;}
+  .mobnav button.active{color:#e0573f;font-weight:600;box-shadow:inset 0 -2px 0 #e0573f;}
+  .mobnav .n{background:#2c2248;border-radius:8px;padding:0 6px;font-size:11px;color:var(--dim);}
+  .mobnav button.active .n{background:#fbe4e4;color:var(--wolf-fg);}
 }
 
 @supports (height: 100dvh){
@@ -304,7 +458,7 @@ details[open] summary::before{content:"▾ ";}
      border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--dim);
      padding:7px 14px;white-space:nowrap;}
 .mic:disabled{opacity:.5;cursor:not-allowed;}
-.mic.rec{border-color:#c0392b;color:#c0392b;background:#fdf0ee;}
-.mic.rec .dot{width:8px;height:8px;border-radius:50%;background:#c0392b;animation:blink 1s infinite;}
+.mic.rec{border-color:#e0573f;color:#e0573f;background:rgba(200,60,60,.16);}
+.mic.rec .dot{width:8px;height:8px;border-radius:50%;background:#e0573f;animation:blink 1s infinite;}
 .mic.busy{color:var(--dim);}
 @keyframes blink{50%{opacity:.25;}}

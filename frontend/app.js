@@ -18,9 +18,16 @@ const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<"
 const roleOf = (seat) => S.state?.players?.find((p) => p.seat === seat)?.role || "";
 const nameOf = (seat) => S.state?.names?.[String(seat)] || `${seat}号`;
 const isPlay = () => S.state?.mode === "play";
+// 座位数跟着对局配置走（6 人局 / 9 人局）
+const seatCount = () => S.state?.size || S.setups?.[$("setupSel").value]?.size || 6;
+const seatList = () => Array.from({ length: seatCount() }, (_, i) => i + 1);
 // 音色两档：快速 = qwen-audio-3.0-tts-flash（一把嗓子，约 0.8s/句），
 // 真实 = cosyvoice-v3.5-flash 的克隆音色（男女跟着头像走，约 1.6s/句）
 const realVoice = () => $("voiceMode").value === "real";
+
+// 身份图：frontend/img/roles/*.png
+const ROLE_IMG = { "狼人": "wolf", "预言家": "seer", "守卫": "guard",
+                   "平民": "villager", "猎人": "hunter", "女巫": "witch" };
 
 // 玩家头像：开局时后端从 12 张里随机抽 6 张发给 1–6 号（state.avatars）。
 // 事件流、左栏玩家、顶栏共用这一个，号码压在头像下半部当角标 —— 谁在说话一眼认得出，
@@ -42,6 +49,18 @@ function face(seat, cls = "", label = "", eid = null) {
   const tag = label || `${seat}<i>号</i>`;
   return `<span class="face ${cls}${speaking}" data-seat="${seat}">${img}
             <b class="face-no">${tag}</b></span>`;
+}
+
+// 你自己的身份卡，挂在开局那排号码牌右边。模拟模式没有「你」，就不出这张卡
+function idCard() {
+  const st = S.state;
+  const me = st && st.human ? st.players.find((p) => p.seat === st.human) : null;
+  if (!me) return "";
+  return `<div class="idcard">
+    ${face(me.seat, "md")}
+    <div class="idcard-t">你是 <b>${me.seat}号</b>
+      ${me.role ? `<span class="rtag r-${me.role}">${me.role}</span>` : ""}
+      <br><span class="idcard-s">${me.alive ? "存活" : "已出局"}</span></div></div>`;
 }
 
 // 法官（0 号）：也每局换一张脸，角标写「法官」而不是号码
@@ -69,46 +88,87 @@ const audienceLabel = (a) => {
 };
 
 /* ---------------- 左栏 ---------------- */
+// 左栏不再列玩家了：切上下文靠中栏顶上那排头像，存活/身份看事件流和身份卡
 function renderPlayers() {
-  const box = $("players");
   const st = S.state;
   if (!st) return;
-  const rows = st.players.map((p) => {
-    const active = S.filter === p.seat ? " active" : "";
-    const dead = p.alive ? "" : " dead";
-    const meta = `${p.alive ? "存活" : "第" + p.death_round + "轮出局"}<br>${p.decisions} 次决策 · ${kchars(p.ctx_chars)}`;
-    const me = p.seat === S.state.human ? '<span class="rtag r-守卫">你</span>' : "";
-    const tag = p.role ? `<span class="rtag r-${p.role}">${p.role}</span>`
-                       : `<span class="rtag r-平民">?</span>`;
-    return `<div class="prow${active}${dead}" data-seat="${p.seat}">
-      ${face(p.seat, "md")}
-      <span class="pname">${nameOf(p.seat)}</span>${tag}${me}
-      <span class="pmeta">${meta}</span></div>`;
-  });
-  const sysActive = S.filter === "sys" ? " active" : "";
-  // 法官排在 6 个玩家后面：他不是玩家，但这一局的脸也该有个地方挂着
-  const judgeRow = seatFace(0)
-    ? `<div class="prow judge">${judgeFace("md")}
-         <span class="pname">法官</span>
-         <span class="pmeta">主持本局</span></div>` : "";
-  box.innerHTML =
-    `<div class="prow sys${sysActive}" data-seat="sys">
-       <span class="pname">系统全局状态</span>
-       <span class="pmeta">${st.sys_calls} 次调用</span></div>` + rows.join("") + judgeRow;
-  box.querySelectorAll(".prow[data-seat]").forEach((el) =>
-    el.addEventListener("click", () => {
-      const v = el.dataset.seat;
-      const seat = v === "sys" ? "sys" : Number(v);
-      S.filter = S.filter === seat ? null : seat;
-      renderPlayers();
-      renderCalls();
-      if (isMobile() && S.filter !== null) setTab("ctx");
-    })
-  );
-  const aliveN = st.players.filter((p) => p.alive).length;
-  $("aliveCount").textContent = `${aliveN}/${st.players.length} 存活`;
+  renderCtxFaces();
+  renderSeats();
   $("callCount").textContent = st.calls;
   $("navCalls").textContent = st.calls;
+}
+
+// 中栏顶上固定的两块：一条「系统全局状态」+ 一排 6 个头像，点谁就只看谁的上下文。
+// 不带存活/决策那些数字 —— 要看细节点进去就是了
+// 牌桌视图：座位分坐左右两列，中间是事件流（Play 模式用；Debug 模式不画）
+function renderSeats() {
+  const L = $("seatsL"), R = $("seatsR");
+  if (!L || !R) return;
+  if (!S.state || $("uiMode").value === "debug") { L.innerHTML = R.innerHTML = ""; return; }
+  const st = S.state;
+  const seats = seatList();
+  const half = Math.ceil(seats.length / 2);
+  const card = (seat) => {
+    const p = st.players.find((x) => x.seat === seat);
+    const me = seat === st.human ? " me" : "";
+    const dead = p && !p.alive ? " dead" : "";
+    const role = p && p.role;
+    const name = st.names?.[String(seat)];
+    // 和事件流里发言人那一列同一个样式：横着一张卡，左脸右身份
+    return `<button class="seat who${dead}${me} ${role ? `g-${role}` : "unknown"}" data-seat="${seat}">
+      ${face(seat, "md")}<span class="who-r">${role ? esc(role) : (name ? esc(name).slice(0, 4) : "未知")}</span>
+      ${p && !p.alive ? '<span class="seat-x">出局</span>' : ""}</button>`;
+  };
+  L.innerHTML = seats.slice(0, half).map(card).join("");
+  R.innerHTML = seats.slice(half).map(card).join("");
+  [L, R].forEach((box) => box.querySelectorAll(".seat").forEach((el) =>
+    el.addEventListener("click", () => {
+      const seat = Number(el.dataset.seat);
+      S.filter = S.filter === seat ? null : seat;
+      renderCtxFaces();
+      renderCalls();
+    })));
+}
+
+function renderCtxFaces() {
+  const box = $("ctxFaces");
+  const sys = $("sysRow");
+  if (!box || !sys) return;
+  if (!S.state) { box.innerHTML = ""; sys.innerHTML = ""; return; }
+  const st = S.state;
+
+  // 两块：法官卡（和下面六张身份卡同一个格式）+ 单独一条系统全局状态
+  const on = S.filter === "sys" ? " active" : "";
+  sys.innerHTML =
+    (seatFace(0)
+      ? `<button class="ctxface judge${on}" data-seat="sys" title="只看系统的全局状态">
+           ${judgeFace("md")}<span class="ctxface-r">法官</span></button>` : "")
+    + `<button class="sysline${on}" data-seat="sys">
+         <span class="sysline-t">系统全局状态</span>
+         <span class="sysline-n">${st.sys_calls} 次调用</span></button>`;
+
+  box.innerHTML = seatList().map((seat) => {
+    const p = st.players.find((x) => x.seat === seat);
+    const cls = (S.filter === seat ? " active" : "") + (p && !p.alive ? " dead" : "");
+    // 模拟模式（以及对局结束后）身份是公开的，直接写出来；藏着的时候写「未知身份」
+    const role = p && p.role;
+    // 整张卡染成身份色，身份用白字压在上面
+    const g = role ? ` g-${role}` : " unknown";
+    return `<button class="ctxface${cls}${g}" data-seat="${seat}" title="只看 ${seat}号的上下文">
+      ${face(seat, "md")}<span class="ctxface-r">${role || "未知"}</span></button>`;
+  }).join("");
+
+  const pick = (v) => {
+    const key = v === "sys" ? "sys" : Number(v);
+    S.filter = S.filter === key ? null : key;
+    renderCtxFaces();
+    renderCalls();
+    if (isMobile() && S.filter !== null) setTab("ctx");
+  };
+  sys.querySelectorAll("[data-seat]").forEach((el) =>
+    el.addEventListener("click", () => pick(el.dataset.seat)));
+  box.querySelectorAll("[data-seat]").forEach((el) =>
+    el.addEventListener("click", () => pick(el.dataset.seat)));
 }
 
 async function loadHistory() {
@@ -143,6 +203,7 @@ function renderCalls() {
 
   $("filterBar").hidden = S.filter === null;
   $("filterName").textContent = S.filter === "sys" ? "系统全局状态" : S.filter + "号";
+  renderSysBlk(list);
 
   if (!list.length) {
     box.innerHTML = isPlay()
@@ -151,6 +212,25 @@ function renderCalls() {
     return;
   }
   box.innerHTML = list.slice(-60).map(cardHTML).join("");
+}
+
+// 常驻的「规则与身份」每张卡都贴一遍太吵，提到中栏顶上只留一份：
+// 选了某个人就显示他那份（身份 + 注入的人设都在里面），没选就显示公共规则
+function renderSysBlk(list) {
+  const box = $("sysBlk");
+  const one = [...list].reverse().find((c) => c.system_prompt);
+  if (!one) { box.hidden = true; return; }
+  box.hidden = false;
+  const seat = typeof S.filter === "number" ? S.filter : null;
+  const full = one.system_prompt;
+  const text = seat ? full : full.split("【你的身份】")[0].trim();
+  const who = seat ? `${seat}号的规则与身份` : "规则（所有人共用）";
+  const persona = seat && S.state?.personas?.[String(seat)];
+  const tags = persona
+    ? `<div class="persona">${Object.entries(persona)
+        .map(([k, v]) => `<span><i>${esc(k)}</i>${esc(v)}</span>`).join("")}</div>` : "";
+  box.innerHTML = `<summary>${who}（常驻，${text.length} 字）</summary>
+    ${tags}<div class="blk">${esc(text)}</div>`;
 }
 
 function cardHTML(c) {
@@ -168,8 +248,6 @@ function cardHTML(c) {
     <div class="card-head"><b>${esc(c.title)}</b>
       <span class="ctx">${sys ? c.model : "ctx " + kchars(c.ctx_chars)}</span></div>
     <div class="card-body">
-      <details><summary>${sys ? "上帝视角说明" : "规则与身份（常驻，" + c.system_prompt.length + " 字）"}</summary>
-        <div class="blk">${esc(c.system_prompt)}</div></details>
       <details open><summary>本轮新增（${c.delta.length} 字）</summary>
         <div class="blk">${esc(c.delta)}</div></details>
       <div class="out"><span class="k">输出${c.latency_ms ? " · " + (c.latency_ms / 1000).toFixed(1) + "s" : ""}</span>
@@ -178,8 +256,8 @@ function cardHTML(c) {
 }
 
 /* ---------------- 右栏 ---------------- */
-// 「存活玩家 / 发言顺序」永远跟在法官那句后面，是它的注脚而不是一条独立事件，
-// 所以渲染时直接并进法官的气泡里（括号），少占一行
+// 「存活玩家 / 发言顺序」是给 agent 上下文用的，法官那句话里已经把顺序说全了，
+// UI 上不再画它
 const isRoster = (ev) => ev && ev.kind === "system" && ev.text.startsWith("存活玩家");
 
 function renderLog() {
@@ -193,9 +271,20 @@ function renderLog() {
   };
   for (let i = 0; i < S.events.length; i++) {
     const ev = S.events[i];
-    if (isRoster(ev) && (seg ? seg.rows.length : out.length)) continue;   // 已并进上一条
-    const next = S.events[i + 1];
-    const html = rowHTML(ev, isRoster(next) ? next.text : "");
+    if (isRoster(ev)) continue;
+    let html;
+    if (ev.kind === "vote") {
+      // 一人一条太碎，连着的投票并成一张卡，按投给谁归堆；
+      // 紧跟着法官那句「投票结果…」也收进同一张卡（照样能播、照样逐字浮出）
+      const group = [ev];
+      while (S.events[i + 1] && S.events[i + 1].kind === "vote") group.push(S.events[++i]);
+      const nx = S.events[i + 1];
+      const tail = nx && nx.kind === "result" && /^(投票结果|补充投票)/.test(nx.text)
+        ? S.events[++i] : null;
+      html = voteCard(group, tail);
+    } else {
+      html = rowHTML(ev);
+    }
     if (ev.kind === "phase") {
       flush();
       seg = { cls: ev.text.includes("天") ? "day" : "night", rows: [html] };
@@ -220,9 +309,51 @@ function playBtn(ev) {
            title="${on ? "停止" : "播放这一句"}">${on ? WAVE_ICON : PLAY_ICON}</button>`;
 }
 
-function rowHTML(ev, extra = "") {
+// 票型归堆：1号 2号 5号 → 4号，票多的排前面
+function voteCard(list, tail) {
+  const by = new Map();
+  for (const ev of list) {
+    const t = ev.meta && ev.meta.target;
+    if (!t) continue;
+    if (!by.has(t)) by.set(t, []);
+    by.get(t).push(ev.seat);
+  }
+  if (!by.size) return "";
+  const lines = [...by.entries()]
+    .sort((a, b) => b[1].length - a[1].length || a[0] - b[0])
+    .map(([t, voters]) => `<div class="votel">
+        <span class="votefrom">${voters.sort((a, b) => a - b)
+          .map((s) => face(s, "sm", "", -1)).join("")}</span>
+        <span class="votearrow">→</span>
+        <span class="voteto">${face(t, "sm", "", -1)}</span>
+        <span class="votecnt">${voters.length} 票</span></div>`);
+  // 票数一行、结果一行，座位号加粗。这条不做逐字浮出（no-reveal），
+  // 不然排版会被拆成一串 span 冲掉
+  const bold = (t) => esc(t).replace(/(\d+)\s*号/g, "<b>$1 号</b>");
+  let foot = "";
+  if (tail) {
+    const body = tail.text.replace(/^(投票结果|补充投票)：\s*/, "");
+    const cut = body.indexOf("。");
+    const head = cut > 0 ? body.slice(0, cut + 1) : body;
+    const rest = cut > 0 ? body.slice(cut + 1) : "";
+    foot = `<div class="row votecard-foot" data-eid="${tail.id}">
+      <div class="bubble result no-reveal">${bold(head)}${rest ? `<br>${bold(rest)}` : ""}</div>
+      ${playBtn(tail)}</div>`;
+  }
+  return `<div class="votecard"><div class="votecard-h">本轮票型</div>${lines.join("")}${foot}</div>`;
+}
+
+// 发言人那一列：和中栏那六张卡同一个样式 —— 整块按身份上色，身份用白字压在头像右边。
+// 法官同样是一张卡（紫灰底），右边写「法官」
+function whoBlock(seat, eid) {
+  if (!seat) return `<div class="who judge">${judgeFace("", eid)}<span class="who-r">法官</span></div>`;
+  const role = roleOf(seat);
+  return `<div class="who${role ? ` g-${role}` : " unknown"}">
+    ${face(seat, "", "", eid)}<span class="who-r">${role || "未知"}</span></div>`;
+}
+
+function rowHTML(ev) {
   const rid = ` data-eid="${ev.id}"`;
-  const note = extra ? `<span class="aside">（${esc(extra.replace(/。$/, ""))}）</span>` : "";
   const only = audienceLabel(ev.audience);
   // 可见范围不单独占一个胶囊，跟在正文后面当个括号 —— 它只是句注脚，不该抢位置
   const onlyTag = only
@@ -235,41 +366,60 @@ function rowHTML(ev, extra = "") {
   if (ev.kind === "system" && ev.text.startsWith("存活玩家"))
     return `<div class="info">${esc(ev.text)}</div>`;
   if (ev.kind === "system" && ev.text.startsWith("游戏开始")) {
-    // 开局先把 6 个人摆出来。座位清单本来就写在这条事件的文本里（agent 的上下文要用），
-    // 但 UI 上有头像就够了，把那半句摘掉，只留配置
-    // 法官站最左边，用一条竖线和 1–6 号隔开 —— 他不是这一局的玩家
-    // 带上 ev.id：开局这排是「历史」，不该跟着谁在说话一起呼吸
-    const roster = (seatFace(0) ? judgeFace("", ev.id) + `<span class="roster-split"></span>` : "")
-      + [1, 2, 3, 4, 5, 6].map((seat) => face(seat, "", "", ev.id)).join("");
-    const note = ev.text.replace(/共 ?6 ?名玩家：[^。]*。/, "");
-    // 胜负条件写在开局这条底下：狼人是「人数追平就赢」，不是「杀光」
-    const win = "狼人阵营胜利条件：活着的狼人数量追平好人（2 狼对 2 好人即可），"
-              + "不必杀光；好人阵营：把 2 只狼全部票出局或杀掉。";
+    // 座位牌左右两列已经摆着了，开局这里不再重复一排头像，只留配置和胜负说明
+    const note = ev.text.replace(/共 ?\d+ ?名玩家：[^。]*。/, "");
+    const nw = S.state?.n_wolves
+      || Number((S.setups?.[S.state?.setup]?.desc || "").match(/(\d+)\s*狼人/)?.[1]) || 2;
+    const win = "胜负算屠边：狼人把所有平民杀光（屠民）或者把所有神职杀光（屠神）就赢，"
+              + `不必杀光所有人；好人阵营要把 ${nw} 只狼全部票出局或杀掉。`;
     return `<div class="row"${rid}><div class="bubble plain roster-box">
-      <div class="roster">${roster}</div>
-      <div class="roster-note">${esc(note)}<br>${esc(win)}</div></div></div>`;
+      <div class="roster-main">
+        <div class="roster-note">${esc(note)}<br>${esc(win)}</div>
+      </div>${idCard()}</div></div>`;
   }
   if (ev.kind === "speech") {
     const seat = ev.seat, role = roleOf(seat);
     const body = ev.text.replace(/^[^：]*：/, "");
-    return `<div class="row"${rid}><div class="who">${face(seat, "", "", ev.id)}
-        ${role ? `<span class="badge r-${role}">${role}</span>` : ""}</div>
+    return `<div class="row"${rid}>${whoBlock(seat, ev.id)}
       <div class="bubble say${role ? " r-" + role : ""}">${esc(body)}</div>${playBtn(ev)}</div>`;
   }
   if (ev.kind === "vote")
     return `<div class="row"><div class="bubble plain vote">${esc(ev.text)}${onlyTag}</div></div>`;
+  // 结算那条：左边座位头像、右边身份图，摆成一张表
+  if (ev.kind === "result" && ev.text.includes("身份公布") && S.state?.players) {
+    const head = ev.text.split("身份公布")[0].trim();
+    const rows = S.state.players.map((p) => {
+      const img = ROLE_IMG[p.role]
+        ? `<img class="roleimg" src="/static/img/roles/${ROLE_IMG[p.role]}.png" alt="${p.role}">`
+        : "";
+      return `<div class="rvrow">${face(p.seat, "md", "", ev.id)}
+        <span class="rvseat">${p.seat}号</span>${img}
+        <span class="rtag r-${p.role || "平民"}">${esc(p.role || "?")}</span></div>`;
+    }).join("");
+    return `<div class="row"${rid}><div class="bubble result revealcard no-reveal">
+      <div class="rvhead">${esc(head)}</div><div class="rvgrid">${rows}</div></div>
+      ${playBtn(ev)}</div>`;
+  }
   if (ev.kind === "judge" || ev.kind === "result")
-    return `<div class="row"${rid}><div class="who">${judgeFace("", ev.id)}</div>
-      <div class="bubble ${ev.kind === "judge" ? "judgeline" : "result"}">${esc(ev.text)}${note}</div>
+    return `<div class="row"${rid}>${whoBlock(0, ev.id)}
+      <div class="bubble ${ev.kind === "judge" ? "judgeline" : "result"}">${esc(ev.text)}</div>
       ${playBtn(ev)}</div>`;
   if (ev.kind === "night_action") {
     const role = ev.seat ? roleOf(ev.seat) : "";
-    const badge = ev.seat
-      ? `<div class="who">${face(ev.seat, "", "", ev.id)}
-           ${role ? `<span class="badge r-${role}">${role}</span>` : ""}</div>`
-      : `<div class="who">${judgeFace("", ev.id)}</div>`;
+    const badge = whoBlock(ev.seat, ev.id);
+    // 「1号（狼）：」这个前缀是给 agent 上下文用的，UI 上头像卡已经写着谁、什么身份
+    let body = esc(ev.seat ? ev.text.replace(/^\d+\s*号（[^）]*）：\s*/, "") : ev.text);
+    // 查验结果和刀口是这一夜最要紧的两个信息，给它们加个重点标记（这两条不做逐字浮出，
+    // 否则 reveal 会把标签拆成纯文本）
+    const marked = body
+      .replace(/是(好人|狼人)/, (m, r) =>
+        `是<b class="verdict ${r === "好人" ? "good" : "bad"}">【${r}】</b>${r === "好人" ? "👍" : "🐺"}`)
+      .replace(/刀口定为\s*(\d+)\s*号/, "刀口定为 <b class=\"verdict kill\">【$1号】</b>");
+    const noReveal = marked !== body ? " no-reveal" : "";
+    body = marked;
     return `<div class="row"${rid}>${badge}
-      <div class="bubble ${role ? "r-" + role : only ? "wolfnight" : ""}">${esc(ev.text)}${onlyTag}</div>
+      <div class="bubble ${role ? "r-" + role : ev.seat ? (only ? "wolfnight" : "") : "judgeline"}${noReveal}">
+        ${body}${onlyTag}</div>
       ${playBtn(ev)}</div>`;
   }
   return `<div class="row"><div class="bubble plain">${esc(ev.text)}${onlyTag}</div></div>`;
@@ -315,7 +465,13 @@ function connect() {
       renderAsk(S.state.pending);        // 刷新页面时如果正轮到你，把问题接回来
       renderAll(); return;
     }
-    if (msg.state && msg.type !== "event") { S.state = msg.state; renderMeBar(); }
+    if (msg.state && msg.type !== "event") {
+      const wasReveal = S.state && S.state.reveal;
+      S.state = msg.state;
+      renderMeBar();
+      // 身份刚公布：把事件流重画一遍，发言人那一列跟着从「未知」变成真身份
+      if (!wasReveal && S.state.reveal) renderLog();
+    }
     if (msg.type === "event") {
       present({ type: "event", ev: msg.data, state: msg.state });
     } else if (msg.type === "call") {
@@ -386,7 +542,7 @@ async function pollRoom() {
     const info = await (await fetch(`/api/room/${R.code}?token=${R.token}`)).json();
     if (info.detail) { leaveRoom(); return; }
     renderRoom(info);
-    if (info.status === "running" && !S.es) connect();   // 房主开局了，跟着进去
+    if (info.status === "running" && !S.es) { connect(); showScreen("table"); }  // 房主开局了，跟着进去
   } catch (_) {}
 }
 
@@ -423,10 +579,9 @@ function renderMeBar() {
   const me = st.human ? st.players.find((p) => p.seat === st.human) : null;
   const status = st.status === "running" ? `第${st.round}${st.phase === "night" ? "夜" : "天"}`
                : st.winner ? `${st.winner}胜` : "已停止";
-  $("meBarText").innerHTML = (me
-    ? `${face(me.seat, "sm")}你是 <b>${me.seat}号</b> <span class="role r-${me.role}">${me.role}</span>
-       ${me.alive ? "" : "（已出局）"} · ${status}`
-    : `模拟模式 · 上帝视角 · ${status}`);
+  $("meBarText").innerHTML = me
+    ? `${status}${me.alive ? "" : " · 你已出局"}`
+    : `模拟模式 · 上帝视角 · ${status}`;
   $("barStop").disabled = !running;
   $("barNew").disabled = running;
 }
@@ -666,7 +821,7 @@ document.querySelectorAll(".mobnav button")
 // 念完这一条才放出下一条，包括「轮到你」的作答面板。不然语音还没读完
 // 下面的发言就全刷出来了，等于剧透。
 const TTS = { on: false, ok: false, audio: new Audio(), urls: new Map(),
-              unlocked: false, unlocking: false, blocked: false, speaking: null, speakingId: null };
+              unlocked: false, unlockWait: null, blocked: false, speaking: null, speakingId: null };
 TTS.audio.preload = "auto";
 TTS.audio.playsInline = true;
 
@@ -680,29 +835,19 @@ const SILENT_WAV = "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAE
 function unlockAudio() {
   if (TTS.unlocked || !TTS.ok) return;
   try {
-    // unlocking 这个标记是关键：解锁用的静音 play() 是异步的，它 resolve 的时候
-    // 第一条语音往往已经换好 src 开播了 —— 那时候再 pause() 就把法官第一句按停了
-    // （反过来，静音的 play() 被新 src 打断而 reject，也会被误判成「浏览器拦了」）。
-    // 所以回调里先看这面旗子还在不在：playLine 一接管就把它放倒。
-    TTS.unlocking = true;
     TTS.audio.src = SILENT_WAV;
     const p = TTS.audio.play();
     if (p && p.then) {
-      p.then(() => {
-        TTS.unlocked = true;
-        TTS.blocked = false;
-        if (TTS.unlocking) TTS.audio.pause();       // 还没人接管才需要收尾
-      }).catch(() => {
-        if (TTS.unlocking) TTS.blocked = true;
-      }).finally(() => { TTS.unlocking = false; });
+      // 把这次解锁的 promise 留出去：第一条语音必须等它**播完**再换 src。
+      // 不等的话静音那次 play() 会被 AbortError 打断，这个 audio 元素就从来没有
+      // 「成功播放过」，紧接着的第一句会被自动播放策略拦下 —— 表现就是法官第一句没声。
+      TTS.unlockWait = p
+        .then(() => { TTS.unlocked = true; TTS.blocked = false; TTS.audio.pause(); })
+        .catch(() => { TTS.blocked = true; });
     } else {
       TTS.unlocked = true;
-      TTS.unlocking = false;
     }
-  } catch (e) {
-    TTS.unlocking = false;
-    TTS.blocked = true;
-  }
+  } catch (e) { TTS.blocked = true; }
 }
 
 // 万一解锁没赶上（比如刷新页面接上正在跑的一局），下一次点页面任意处补一次
@@ -730,7 +875,7 @@ async function audioURL(seat, text) {
 // 靠 opacity + 微微上移的过渡柔和地淡进来。
 function startReveal(ev) {
   const el = document.querySelector(`.row[data-eid="${ev.id}"] .bubble`);
-  if (!el) return () => {};
+  if (!el || el.classList.contains("no-reveal")) return { start() {}, finish() {} };
   // 末尾的注脚（可见范围）不参与逐字浮出：先摘下来，正文切完再挂回去
   const aside = el.querySelector(".aside");
   if (aside) aside.remove();
@@ -803,7 +948,7 @@ async function playLine(seat, text, eid = null, onStart = null) {
   markPlaying(eid);
   try {
     const src = await audioURL(seat, text);
-    TTS.unlocking = false;              // 从这里开始这个 audio 归我，解锁的收尾别再动它
+    if (TTS.unlockWait) { try { await TTS.unlockWait; } catch (_) {} }   // 等解锁那段静音播完
     TTS.audio.src = src;
     await TTS.audio.play();
     TTS.blocked = false;
@@ -828,10 +973,13 @@ function speakable(ev) {
     return { seat: ev.seat, text: ev.text.replace(/^[^：]*：/, "") };
   if (ev.kind === "result" || ev.kind === "judge")
     return { seat: JUDGE, text: ev.text };
-  if (ev.kind === "night_action")
+  if (ev.kind === "night_action") {
+    // 「（第 1 夜你查验了 5 号）结果：…」这类是发给本人的私密信息，不是谁在说话，不念
+    if (/^（第.+?夜你(查验|守护)了/.test(ev.text)) return null;
     return ev.seat && ev.text.includes("：")         // 狼队商议是角色在说，用他自己的声音
       ? { seat: ev.seat, text: ev.text.replace(/^[^：]*：/, "") }
       : { seat: JUDGE, text: ev.text };
+  }
   return null;
 }
 
@@ -853,7 +1001,13 @@ function present(item) {
 function apply(item) {
   if (item.type === "event") {
     if (S.events.some((e) => e.id === item.ev.id)) return;   // 同一条只渲染一次
-    if (item.state) { S.state = item.state; renderMeBar(); renderPlayers(); }
+    // 每条事件都带着「当时」的状态快照。朗读开着的时候演出会落后好几条，
+    // 等身份已经公布了，这些旧快照再盖回来就会把身份又变回「未知」—— 揭示过就不许倒退
+    if (item.state && !(S.state && S.state.reveal && !item.state.reveal)) {
+      S.state = item.state;
+      renderMeBar();
+      renderPlayers();
+    }
     const box = $("log").parentElement;
     const follow = box.scrollHeight - box.scrollTop - box.clientHeight < 90;
     S.events.push(item.ev);
@@ -901,6 +1055,8 @@ function stopSpeaking() {
 // 左栏的「开一局/停止」和事件流顶栏的「重开/停止」是同一套逻辑
 async function startGame() {
   unlockAudio();                                   // 必须在 await 之前，手势才有效
+  S.filter = null;                                 // 新的一局默认看全部，别粘着上一局点的人
+  showScreen("table");
   $("btnStart").disabled = true;
   $("barNew").disabled = true;
   S.readonly = false;
@@ -910,7 +1066,7 @@ async function startGame() {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: $("modelSel").value, tts: TTS.on, mode: $("modeSel").value,
-      clone: realVoice(),
+      clone: realVoice(), setup: $("setupSel").value,
       role: $("modeSel").value === "play" ? $("roleSel").value : "",
     }),
   });
@@ -963,6 +1119,29 @@ function syncModeUI() {
   if (m !== "multi" && R.code) leaveRoom();
   if (m === "multi" && !R.code) fillNick();
 }
+// Play / Debug 只差两块：中栏「每轮上下文与输出」和左栏「历史对话」
+function applyUiMode() {
+  const debug = $("uiMode").value === "debug";
+  document.body.classList.toggle("no-debug", !debug);
+  renderSeats();
+}
+
+// Play 模式分两屏：开局页（模式/对局/身份/模型/音色 + 开一局）和牌桌页。
+// 牌桌页顶上只留一个「返回」回到开局页 —— 对局不会因此停止
+function showScreen(name) {
+  document.body.classList.toggle("screen-table", name === "table");
+  if (name === "table") renderSeats();
+}
+
+$("btnBack").addEventListener("click", () => showScreen("setup"));
+
+$("uiMode").addEventListener("change", () => {
+  try { localStorage.setItem("ww_ui", $("uiMode").value); } catch (_) {}
+  applyUiMode();
+});
+$("setupSel").addEventListener("change", () => {
+  try { localStorage.setItem("ww_setup", $("setupSel").value); } catch (_) {}
+});
 $("modeSel").addEventListener("change", syncModeUI);
 syncModeUI();
 
@@ -990,6 +1169,7 @@ $("btnRoomStart").addEventListener("click", async () => {
   try {
     await post(`/api/room/${R.code}/start`, {
       token: R.token, model: $("modelSel").value, tts: TTS.on, clone: realVoice(),
+      setup: $("setupSel").value,
     });
     S.events = []; S.calls = []; S.filter = null;
     renderAsk(null);
@@ -1022,13 +1202,23 @@ $("log").addEventListener("click", (e) => {
   if (line) playLine(line.seat, line.text, eid);
 });
 
-$("btnNew").addEventListener("click", startGame);
 $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayers(); renderCalls(); });
 
 (async function init() {
   const cfg = await (await fetch("/api/config")).json();
   $("modelSel").innerHTML = cfg.models
     .map((m) => `<option value="${m}"${m === cfg.model ? " selected" : ""}>${m}</option>`).join("");
+  S.setups = cfg.setups || {};
+  $("setupSel").innerHTML = Object.entries(S.setups)
+    .map(([k, v]) => `<option value="${k}"${k === cfg.setup_default ? " selected" : ""}>
+       ${v.name} · ${v.desc}</option>`).join("");
+  try {
+    const sv = localStorage.getItem("ww_setup");
+    if (sv && S.setups[sv]) $("setupSel").value = sv;
+    const um = localStorage.getItem("ww_ui");
+    if (um === "play" || um === "debug") $("uiMode").value = um;
+  } catch (_) {}
+  applyUiMode();
   TTS.ok = !!cfg.tts;
   REC.ok = !!cfg.asr;
   $("voiceMode").value = cfg.clone_default ? "real" : "fast";
@@ -1041,6 +1231,7 @@ $("filterClear").addEventListener("click", () => { S.filter = null; renderPlayer
   TTS.on = TTS.ok;
   if (!TTS.ok) $("voiceField").title = "未配置 DASHSCOPE_API_KEY / ALIYUN_BAILIAN_API_KEY";
   const snap = await (await fetch("/api/snapshot")).json();
+  if (!snap.empty && snap.state?.status === "running") showScreen("table");
   if (!snap.empty) {
     S.state = snap.state; S.events = snap.events; S.calls = snap.calls;
     renderAsk(snap.state.pending);        // 刚进页面就正轮到你的话，直接把问题摆出来

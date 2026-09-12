@@ -11,7 +11,7 @@ from typing import Any, Callable
 from . import prompts
 from . import tts as tts_mod
 from .llm import LLMClient
-from .model import FACES_F, FACES_M, SETUP, Event, LLMCall, Player, Role
+from .model import DEFAULT_SETUP, FACES_F, FACES_M, SETUPS, Event, LLMCall, Player, Role
 
 GAMES_DIR = Path(__file__).resolve().parent.parent / "logs" / "games"   # 对局存档
 
@@ -27,8 +27,11 @@ class Game:
                  model: str | None = None, tts: bool = False, mode: str = "sim",
                  human_seat: int | None = None, human_role: str | None = None,
                  clone: bool | None = None, humans: int = 0,
-                 names: dict[int, str] | None = None):
+                 names: dict[int, str] | None = None, setup: str | None = None):
         self.gid = gid
+        self.setup_key = setup if setup in SETUPS else DEFAULT_SETUP
+        self.setup = SETUPS[self.setup_key]
+        self.size = len(self.setup["roles"])
         self.tts = bool(tts) and tts_mod.available()
         self.clone = tts_mod.load_tts_config().clone_default_on if clone is None else bool(clone)
         self.mode = mode if mode in ("sim", "play", "multi") else "sim"
@@ -36,12 +39,24 @@ class Game:
         self.rng = random.Random(self.seed)
         self.llm = LLMClient(use_api=use_api, seed=self.seed, model=model)
 
-        roles = SETUP[:]
+        roles = list(self.setup["roles"])
         self.rng.shuffle(roles)
-        self.players = [Player(seat=i + 1, role=roles[i]) for i in range(6)]
+        self.players = [Player(seat=i + 1, role=roles[i]) for i in range(self.size)]
         wolves = [p.seat for p in self.players if p.role is Role.WOLF]
+        # 每个人摇一套说话习惯/推理方式/脾气/打法，塞进常驻的 system 段。
+        # 六个人共用一个模型，不给人设的话发言会齐刷刷地一个味道
+        self.personas: dict[int, dict[str, str]] = {}
         for p in self.players:
-            p.system_prompt = prompts.build_system(p, [s for s in wolves if s != p.seat])
+            persona = {
+                "说话习惯": self.rng.choice(prompts.SPEECH_TICS),
+                "推理方式": self.rng.choice(prompts.REASONING),
+                "脾气": self.rng.choice(prompts.MOODS),
+                "打法": self.rng.choice(prompts.TACTICS),
+            }
+            self.personas[p.seat] = persona
+            p.system_prompt = prompts.build_system(
+                p, [s for s in wolves if s != p.seat],
+                prompts.persona_text(*persona.values()), self.setup)
             p.cursor = 0
 
         self.events: list[Event] = []
@@ -56,6 +71,9 @@ class Game:
         # 引擎内部状态
         self.last_guard: int | None = None
         self.night_death: int | None = None
+        self.night_deaths: list[int] = []        # 一晚可能死两个（狼刀 + 女巫毒）
+        self.witch_cure = True                   # 解药
+        self.witch_poison = True                 # 毒药
         self.seer_checks: dict[int, str] = {}
         self.claimed_seer: int | None = None
         self.suspicion: dict[int, float] = {p.seat: 0.0 for p in self.players}
@@ -64,35 +82,36 @@ class Game:
         # 单人模式可以指定身份（从该身份的座位里挑一个）；多人模式按人数随机分座位。
         self.humans: set[int] = set()
         if self.mode == "play":
-            if human_seat in range(1, 7):
+            if human_seat in range(1, self.size + 1):
                 self.humans = {human_seat}
             elif human_role:
                 pool = [p.seat for p in self.players if p.role.value == human_role]
-                self.humans = {self.rng.choice(pool) if pool else self.rng.randint(1, 6)}
+                self.humans = {self.rng.choice(pool) if pool else self.rng.randint(1, self.size)}
             else:
-                self.humans = {self.rng.randint(1, 6)}
+                self.humans = {self.rng.randint(1, self.size)}
         elif self.mode == "multi":
-            seats = list(range(1, 7))
+            seats = list(range(1, self.size + 1))
             self.rng.shuffle(seats)
-            self.humans = set(seats[:max(1, min(6, humans))])
+            self.humans = set(seats[:max(1, min(self.size, humans))])
         self.names: dict[int, str] = dict(names or {})
         # 每局随机 3 女 3 男，打乱之后发给 1–6 号：同一局里不重样，换一局就换一拨人。
         # 跟着 self.rng 走，所以同一个 seed 复盘出来的还是同一批脸。
-        women = self.rng.sample(FACES_F, 3)
-        men = self.rng.sample(FACES_M, 4)          # 多抽一张给法官
-        faces = women + men[:3]
+        half = self.size // 2
+        women = self.rng.sample(FACES_F, min(half, len(FACES_F)))
+        men = self.rng.sample(FACES_M, self.size - len(women) + 1)   # 多抽一张给法官
+        faces = women + men[:self.size - len(women)]
         self.rng.shuffle(faces)
-        self.avatars: dict[int, str] = dict(zip(range(1, 7), faces))
+        self.avatars: dict[int, str] = dict(zip(range(1, self.size + 1), faces))
         # 0 号是法官：也每局换一张脸，从男池里挑没被玩家占用的那张
         # （法官那把嗓子是男声，脸得对得上）
-        self.avatars[0] = men[3]
+        self.avatars[0] = men[self.size - len(women)]
         # 朗读用哪把嗓子：性别跟着头像走，同性别的三个人各拿一把，不重样。
         # 编码成 "f0"/"m2" 这样的槽位，前端朗读时原样传回来（见 tts.pick）
         # 只发给 1–6 号；法官走自己那把嗓子（见 tts.pick），不占槽位，
         # 否则它会拿到 m3，回头 % 池长度又绕回 m0，和某个玩家撞车
         slots: dict[str, int] = {"f": 0, "m": 0}
         self.voices: dict[int, str] = {}
-        for seat in range(1, 7):
+        for seat in range(1, self.size + 1):
             g = self.avatars[seat][0]
             self.voices[seat] = f"{g}{slots[g]}"
             slots[g] += 1
@@ -350,11 +369,17 @@ class Game:
             "sys_calls": sum(1 for c in self.calls if c.seat is None),
             "elapsed": (self.finished_at or time.time()) - self.started_at,
             "mode": self.mode,
+            "size": self.size,
+            "setup": self.setup_key,
+            "setup_name": self.setup["name"],
+            "setup_desc": self.setup["desc"],
+            "n_wolves": sum(1 for r in self.setup["roles"] if r is Role.WOLF),
             "human": viewer,
             "humans": sorted(self.humans),
             "names": {str(k): v for k, v in self.names.items()},
             "avatars": {str(k): v for k, v in self.avatars.items()},
             "voices": {str(k): v for k, v in self.voices.items()},
+            "personas": {str(k): v for k, v in self.personas.items()},
             "pending": self.pending.get(viewer) if viewer else None,
             "players": [p.public(reveal=show_roles or p.seat == viewer)
                         for p in self.players],
@@ -364,13 +389,15 @@ class Game:
         self.status = "running"
         self.phase = "开局"
         names = "、".join(p.name for p in self.players)
-        self._emit("system", f"游戏开始，共 6 名玩家：{names}。配置：2 狼人、2 平民、1 预言家、1 守卫。")
+        self._emit("system", f"游戏开始，共 {self.size} 名玩家：{names}。"
+                             f"配置：{self.setup['desc']}。胜负算屠边。")
         try:
             while self.round < 8:
                 self.round += 1
                 await self._night()
                 await self._day()
                 if self._settle():
+                    await self._pick_mvp()
                     break
             else:                                  # 8 轮还没分出胜负（极少见）
                 self.winner = "平局"
@@ -427,9 +454,8 @@ class Game:
             for t in proposals.values():
                 counts[t] = counts.get(t, 0) + 1
             target = max(counts, key=lambda t: (counts[t], -t))
-            detail = "，".join(f"{s}: {t}" for s, t in proposals.items())
-            self._emit("night_action", f"今晚刀口定为 {target} 号（各自报的：{{{detail}}}）。",
-                       audience=wolf_seats)
+            # 各自报了谁，上面每条商议里都说过了，这里再列一遍字典既啰嗦、念出来也难听
+            self._emit("night_action", f"今晚刀口定为 {target} 号。", audience=wolf_seats)
 
         async def seer_step() -> None:
             seer = next((p for p in self.players if p.role is Role.SEER and p.alive), None)
@@ -450,16 +476,44 @@ class Game:
         await self._gather(guard_step(), wolf_step(), seer_step())
         self.last_guard = guarded
 
-        # 结算：被守的人当晚不死
-        died = None if (target is None or target == guarded) else target
+        # 女巫要知道今晚谁被刀，所以她只能等狼队定完刀口再动 —— 这一步不能并发
+        saved = False
+        poisoned: int | None = None
+        witch = next((p for p in self.players if p.role is Role.WITCH and p.alive), None)
+        if witch and (self.witch_cure or self.witch_poison):
+            killed = None if (target is None or target == guarded) else target
+            instr, schema = prompts.witch_instruction(
+                self.round, self.alive, killed, witch.seat, self.witch_cure, self.witch_poison)
+            out = await self._ask(witch, "witch", f"{witch.name} 第{self.round}夜", instr, schema,
+                                  killed=killed, has_cure=self.witch_cure,
+                                  has_poison=self.witch_poison)
+            act = str(out.get("action", "pass"))
+            if act == "save" and self.witch_cure and killed and killed != witch.seat:
+                saved, self.witch_cure = True, False
+                self._emit("night_action", f"（第 {self.round} 夜你用掉了解药，救下 {killed} 号）",
+                           audience=[witch.seat], seat=witch.seat)
+            elif act == "poison" and self.witch_poison:
+                pool = [s for s in self.alive if s != witch.seat]
+                poisoned = self._coerce(out.get("target"), pool, self.rng)
+                self.witch_poison = False
+                self._emit("night_action", f"（第 {self.round} 夜你用掉了毒药，毒杀 {poisoned} 号）",
+                           audience=[witch.seat], seat=witch.seat)
+
+        # 结算：被守的人当晚不死，被救的也不死；被毒的另算一个
+        died = None if (target is None or target == guarded or saved) else target
+        deaths: list[int] = []
+        for seat, cause in ((died, "夜间被刀"), (poisoned, "被女巫毒杀")):
+            if seat is None or seat in deaths:      # 毒的正好是刀的那个，别记两次
+                continue
+            p = self.player(seat)
+            p.alive, p.death_round, p.death_cause = False, self.round, cause
+            deaths.append(seat)
         self._sys_call(f"系统全局状态 第{self.round}夜",
-                       f"守卫守护={guarded}，狼队刀口={target}",
-                       {"守护": guarded, "刀口": target,
-                        "结果": "平安夜（守护成功）" if died is None else f"{died} 号出局"})
-        if died is not None:
-            p = self.player(died)
-            p.alive, p.death_round, p.death_cause = False, self.round, "夜间被刀"
+                       f"守护={guarded}，刀口={target}，解药={saved}，毒药={poisoned}",
+                       {"守护": guarded, "刀口": target, "解药": saved, "毒药": poisoned,
+                        "结果": "平安夜" if not deaths else "、".join(f"{s} 号出局" for s in deaths)})
         self.night_death = died
+        self.night_deaths = deaths
 
     @staticmethod
     async def _gather(*coros) -> None:
@@ -473,8 +527,13 @@ class Game:
     async def _day(self) -> None:
         self.phase = "day"
         self._emit("phase", f"—— 第 {self.round} 天 ——")
-        dead = ("昨晚是平安夜。" if self.night_death is None
-                else f"昨晚 {self.night_death} 号 倒牌出局，不留遗言。")
+        if not self.night_deaths:
+            dead = "昨晚是平安夜。"
+        else:
+            who = "、".join(f"{s} 号" for s in self.night_deaths)
+            dead = f"昨晚 {who} 倒牌出局，不留遗言。"
+        if self.night_deaths:
+            await self._hunter_shot(self.night_deaths)
         # 法官一口气报完：天数 + 死讯 + 发言顺序，别拆成三条
         if self._winner():
             self._judge(f"天亮了。现在是第 {self.round} 天。{dead}")
@@ -484,10 +543,11 @@ class Game:
         start = self.rng.choice(alive)
         i = alive.index(start)
         order = alive[i:] + alive[:i]
-        # 顺序念全了才知道自己什么时候说话，只说「从 X 号开始」不够
-        seq = "、".join(f"{s} 号" for s in order)
+        # 顺序念全了才知道自己什么时候说话，只说「从 X 号开始」不够。
+        # 后面那串只报数字：「六、一、二、四、五」比「六号、一号、二号…」顺耳得多
+        seq = "、".join(str(s) for s in order)
         self._judge(f"天亮了。现在是第 {self.round} 天。{dead}"
-                    f"现在开始发言，从 {start} 号开始，依次是 {seq}。")
+                    f"现在开始发言，从 {start} 号开始，发言顺序依次是 {seq}。")
         self._emit("system", f"存活玩家：{alive}，发言顺序：{order}。", order=order)
 
         for seat in order:
@@ -507,18 +567,92 @@ class Game:
                     self.suspicion[other] = self.suspicion.get(other, 0.0) + 0.3
 
         # 投票
-        votes: dict[int, int] = {}
-        voters = [s for s in order if self.player(s).alive]
+        votes, tally, tied = await self._vote_round(
+            [s for s in order if self.player(s).alive],
+            lambda seat: [x for x in self.alive if x != seat], "投票")
+        detail = self._tally_text(tally)
+        out_seat: int | None = None
 
-        async def vote_one(seat: int) -> None:
+        if len(tied) == 1:
+            out_seat = tied[0]
+            await self._banish(out_seat, f"投票结果：{detail}。")
+        else:
+            # 平票不是直接过夜：平票的人各再说一轮，其余人在他们之间重投一次。
+            # 还平票才天黑 —— 不然一局里最有信息量的对峙就这么被跳过去了。
+            names = "、".join(f"{s} 号" for s in tied)
+            self._emit("result", f"投票结果：{detail}。{names}平票。",
+                       tally=tally, tied=tied)
+            self._judge(f"{names}平票，各做一次补充发言，然后由其余玩家在他们之间重新投票。")
+            for seat in tied:
+                p = self.player(seat)
+                instr, schema = prompts.pk_speech_instruction(self.round, tied, seat)
+                out = await self._ask(p, "speech", f"{p.name} 第{self.round}天 补充发言", instr, schema)
+                speech = str(out.get("speech", "")).strip() or "我没什么好补充的。"
+                self._emit("speech", f"{p.name}：{speech}", seat=seat, stream="speech")
+
+            pk_voters = [s for s in self.alive if s not in tied]
+            if not pk_voters:
+                self._emit("result", "没有其他玩家可以投票，本轮无人出局。", tally=tally)
+            else:
+                votes2, tally2, tied2 = await self._vote_round(
+                    pk_voters, lambda seat: tied, "补充投票", pk=tied)
+                detail2 = self._tally_text(tally2)
+                if len(tied2) == 1:
+                    out_seat = tied2[0]
+                    await self._banish(out_seat, f"补充投票：{detail2}。")
+                else:
+                    self._emit("result", f"补充投票：{detail2}。依然平票，本轮无人出局。",
+                               tally=tally2)
+                votes = {**votes, **votes2}
+                tally = tally2
+
+        self._sys_call(f"系统全局状态 第{self.round}天投票", f"票型：{votes}",
+                       {"票型": {f"{k}号": f"{v}号" for k, v in votes.items()},
+                        "计票": {f"{k}号": v for k, v in tally.items()},
+                        "出局": f"{out_seat}号" if out_seat else "平票，无人出局"})
+
+    async def _hunter_shot(self, deaths: list[int]) -> None:
+        """猎人出局就能开枪带走一个人 —— 被女巫毒死除外（毒死的猎人开不了枪）。"""
+        for seat in list(deaths):
             p = self.player(seat)
-            instr, schema = prompts.vote_instruction(self.round, self.alive, seat)
-            out = await self._ask(p, "vote", f"{p.name} 第{self.round}天投票", instr, schema)
+            if p.role is not Role.HUNTER or p.death_cause == "被女巫毒杀":
+                continue
+            self._judge(f"{seat} 号是猎人，出局时可以开枪。")
             pool = [s for s in self.alive if s != seat]
+            if not pool:
+                continue
+            instr, schema = prompts.hunter_instruction(self.round, self.alive, seat)
+            out = await self._ask(p, "hunter", f"{p.name} 开枪", instr, schema)
+            try:
+                shot = int(out.get("target") or 0)
+            except (TypeError, ValueError):
+                shot = 0
+            if shot not in pool:
+                self._emit("result", f"{seat} 号没有开枪。", hunter=seat)
+                continue
+            t = self.player(shot)
+            t.alive, t.death_round, t.death_cause = False, self.round, "被猎人带走"
+            self._emit("result", f"{seat} 号开枪带走了 {shot} 号。", hunter=seat, shot=shot)
+            await self._hunter_shot([shot])          # 枪口下还可能是另一个猎人
+
+    async def _vote_round(self, voters: list[int], pool_for, tag: str,
+                          pk: list[int] | None = None) -> tuple[dict[int, int],
+                                                                dict[int, int], list[int]]:
+        """跑一轮投票：并发问所有人 → 逐条播票型 → 返回 (票, 计票, 并列最高的人)。"""
+        votes: dict[int, int] = {}
+
+        async def one(seat: int) -> None:
+            p = self.player(seat)
+            pool = pool_for(seat)
+            if pk:
+                instr, schema = prompts.pk_vote_instruction(self.round, pk, seat)
+            else:
+                instr, schema = prompts.vote_instruction(self.round, self.alive, seat, pool)
+            out = await self._ask(p, "vote", f"{p.name} 第{self.round}天{tag}", instr, schema)
             votes[seat] = self._coerce(out.get("target"), pool, self.rng)
 
-        await self._gather(*(vote_one(s) for s in voters))   # 投票是同时的，所以并发
-        for seat in voters:                                  # 投票不留理由，只报票型
+        await self._gather(*(one(s) for s in voters))   # 投票是同时的，所以并发
+        for seat in voters:                             # 投票不留理由，只报票型
             t = votes[seat]
             self.suspicion[t] = self.suspicion.get(t, 0.0) + 1.0
             self._emit("vote", f"{self.player(seat).name} → {t}号", seat=seat, target=t)
@@ -527,28 +661,28 @@ class Game:
         for t in votes.values():
             tally[t] = tally.get(t, 0) + 1
         top = max(tally.values()) if tally else 0
-        tied = [s for s, n in tally.items() if n == top]
-        detail = "，".join(f"{s}号 {n}票" for s, n in sorted(tally.items(), key=lambda kv: -kv[1]))
-        if len(tied) == 1:
-            out_seat = tied[0]
-            p = self.player(out_seat)
-            p.alive, p.death_round, p.death_cause = False, self.round, "被投票放逐"
-            self._emit("result", f"投票结果：{detail}。{out_seat} 号被放逐出局。", tally=tally)
-        else:
-            out_seat = None
-            self._emit("result", f"投票结果：{detail}。平票，本轮无人出局。", tally=tally)
-        self._sys_call(f"系统全局状态 第{self.round}天投票", f"票型：{votes}",
-                       {"票型": {f"{k}号": f"{v}号" for k, v in votes.items()},
-                        "计票": {f"{k}号": v for k, v in tally.items()},
-                        "出局": f"{out_seat}号" if out_seat else "平票，无人出局"})
+        return votes, tally, [s for s, n in tally.items() if n == top]
+
+    @staticmethod
+    def _tally_text(tally: dict[int, int]) -> str:
+        return "，".join(f"{s}号 {n}票" for s, n in sorted(tally.items(), key=lambda kv: -kv[1]))
+
+    async def _banish(self, seat: int, prefix: str) -> None:
+        p = self.player(seat)
+        p.alive, p.death_round, p.death_cause = False, self.round, "被投票放逐"
+        self._emit("result", f"{prefix}{seat} 号被放逐出局。", tally={}, out=seat)
+        await self._hunter_shot([seat])
 
     # ---------- 胜负 ----------
     def _winner(self) -> str | None:
+        """屠边：民或神被杀光一边，狼就赢，不必杀光所有人。"""
         wolves = [p for p in self.players if p.role is Role.WOLF and p.alive]
-        goods = [p for p in self.players if p.role is not Role.WOLF and p.alive]
         if not wolves:
             return "好人阵营"
-        if len(wolves) >= len(goods):
+        villagers = [p for p in self.players
+                     if p.alive and p.role is not Role.WOLF and not p.role.is_god]
+        gods = [p for p in self.players if p.alive and p.role.is_god]
+        if not villagers or not gods:
             return "狼人阵营"
         return None
 
@@ -562,6 +696,34 @@ class Game:
         self._sys_call("系统全局状态 结算", "胜负判定",
                        {"胜方": w, "身份": {p.name: p.role.value for p in self.players}})
         return True
+
+    async def _pick_mvp(self) -> None:
+        """法官复盘整局，评一个 MVP 出来。评的是决策质量，输的一方也可以拿。
+
+        走一次独立的模型调用（不挂在任何玩家的上下文上，所以喂的是上帝视角的全量轨迹），
+        记成一条 seat=None 的调用，中间栏在「系统全局状态」里看得到。
+        """
+        if not self.winner:
+            return
+        roles = {p.seat: p.role.value for p in self.players}
+        track = "\n".join(
+            f"[第{e.round}{'夜' if e.phase == 'night' else '天'}] {e.text}"
+            for e in self.events if e.kind in ("night_action", "speech", "vote", "result")
+        )[-6000:]                     # 只留末尾，长局也不至于把上下文撑爆
+        instr, schema = prompts.mvp_instruction(self.winner, roles, track)
+        t0 = time.time()
+        raw, parsed, ms, model = await self.llm.complete(
+            prompts.MVP_SYSTEM, [{"role": "user", "content": instr}], schema, "mvp",
+            {"me": 0, "alive": self.alive, "candidates": sorted(roles)},
+        )
+        seat = self._coerce(parsed.get("seat"), sorted(roles), self.rng)
+        reason = str(parsed.get("reason", "")).strip() or "这局的关键决策踩中了节奏。"
+        self._emit("result", f"本局 MVP：{seat} 号（{roles[seat]}）。{reason}", mvp=seat)
+        self._record(LLMCall(seat=None, title="系统全局状态 评选 MVP",
+                             system_prompt=prompts.MVP_SYSTEM, delta=instr, output=raw,
+                             parsed=parsed, ctx_chars=len(instr), latency_ms=ms or
+                             int((time.time() - t0) * 1000), model=model,
+                             round=self.round, phase=self.phase))
 
     # ---------- 存档 ----------
     def to_json(self, viewer: int | None = None) -> dict[str, Any]:

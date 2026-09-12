@@ -5,6 +5,7 @@
 - 谁用哪把嗓子跟着头像的性别走：Game 开局时给每个座位发一个槽位（f0–f2 / m0–m2），
   朗读时原样传回来，同性别的三个人各拿一把，不重样（见 pick）
 - 念之前先把阿拉伯数字改写成中文数字：「第2夜」交给模型会念成「第两夜」
+- 再过一道 humanize：加停顿、偶尔来个语气词，别一句话从头平到尾像播报
 - 合成结果按 sha1(model|voice|seat|text) 落盘 data/tts/，重复播放不再花钱
 - SDK 是同步的，统一用 asyncio.to_thread 包一层，别卡住事件循环
 """
@@ -14,6 +15,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import random
 import re
 import time
 from dataclasses import dataclass, field
@@ -57,6 +59,43 @@ def normalize_digits(text: str) -> str:
         else:
             out.append("".join(_CN_DIGIT[int(c)] for c in chunk))
     return "".join(out)
+
+
+# 口语化：一句话从头平到尾就是「AI 味」的一半来源。这里在送去合成之前加两样东西：
+#   1. 停顿 —— 用 SSML 的 <break>，实测这档模型认（回听过，标签不会被念出来），
+#      而且它不产生任何文字，所以前端逐字浮出的字幕跟原文还是一一对应的
+#   2. 语气词 —— 少量、只放句首，让开口没那么齐整；法官不加，报幕要稳
+# 随机数按文本内容播种：同一句每次加工出来都一样，免得缓存里存的和下次听到的对不上。
+FILLERS = ("嗯，", "那个，", "诶，", "我说啊，", "这么说吧，")
+
+
+def _pause(ms: int) -> str:
+    return f'<break time="{ms}ms"/>'
+
+
+def humanize(text: str, *, judge: bool = False) -> str:
+    """给一句话加上停顿和语气词，返回 SSML。"""
+    rng = random.Random(hashlib.sha1(text.encode("utf-8")).hexdigest())
+    out: list[str] = []
+
+    if not judge and len(text) > 12 and rng.random() < 0.35:
+        out.append(rng.choice(FILLERS))
+
+    # 按标点切句，逐段加停顿：逗号一档短的，句末一档长的
+    parts = re.findall(r"[^，。！？；：、]+[，。！？；：、]?", text)
+    for i, part in enumerate(parts):
+        out.append(part)
+        if i == len(parts) - 1:
+            break
+        tail = part[-1:]
+        if tail in "。！？":
+            out.append(_pause(rng.randint(260, 420)))
+        elif tail in "，；：":
+            if rng.random() < 0.55:
+                out.append(_pause(rng.randint(140, 260)))
+        elif len(part) >= 18:                 # 一长串没标点的，中间也得换口气
+            out.append(_pause(rng.randint(120, 200)))
+    return "<speak>" + "".join(out) + "</speak>"
 
 
 @dataclass(frozen=True)
@@ -183,7 +222,8 @@ async def synthesize(text: str, voice_key: str | None = None,
     async with lock:
         if path.exists():
             return path.read_bytes()
-        audio = await asyncio.to_thread(_synth_blocking, model, voice, text)
+        spoken = humanize(text, judge=not voice_key)
+        audio = await asyncio.to_thread(_synth_blocking, model, voice, spoken)
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         path.write_bytes(audio)
         return audio

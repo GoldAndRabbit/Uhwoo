@@ -16,7 +16,7 @@ from . import image_api
 from . import room as rooms
 from . import tts
 from .game import GAMES_DIR, Game
-from .model import Role
+from .model import DEFAULT_SETUP, SETUPS, Role
 from .llm import has_credentials
 from .llm_api import load_config
 
@@ -58,6 +58,9 @@ async def config() -> dict[str, Any]:
         "model": cfg.model,
         "models": list(cfg.models),
         "note": f"{cfg.provider}" if ok else "mock（未检测到 ALIYUN_BAILIAN_API_KEY）",
+        "setups": {k: {"name": v["name"], "desc": v["desc"], "size": len(v["roles"])}
+                   for k, v in SETUPS.items()},
+        "setup_default": DEFAULT_SETUP,
         "tts": tts.available(),
         "image": image_api.available(),
         "asr": asr.available(),
@@ -82,7 +85,8 @@ async def start(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     if role and role not in [r.value for r in Role]:
         raise HTTPException(400, f"未知身份 {role}")
     _game = Game(gid, model=model, tts=bool(body.get("tts")), mode=mode,
-                 human_seat=body.get("seat"), human_role=role, clone=body.get("clone"))
+                 human_seat=body.get("seat"), human_role=role, clone=body.get("clone"),
+                 setup=body.get("setup"))
     _task = asyncio.create_task(_game.run())
     return {"gid": gid, "state": _game.state(_game.single_viewer())}
 

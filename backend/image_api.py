@@ -427,6 +427,59 @@ def foreground_ratio(png: bytes) -> float:
     return sum(1 for v in px if v[3] > 96) / len(px)
 
 
+def whiten_bg(png: bytes, *, tol: int = 30, feather: float = 1.2) -> bytes:
+    """把影棚灰底漂成纯白。
+
+    只从**上边和左右边**往里走，不从底边起步 —— 头肩像的衣服是连着底边的，
+    从那儿进去会把浅色衬衫一路啃掉。判定同时卡两条：和边缘基准色的差值在 tol 以内，
+    而且本身是低饱和的（人脸、衣服的彩色都过不了这一关）。
+    """
+    from PIL import Image as _Image
+    from PIL import ImageFilter
+
+    im = _Image.open(io.BytesIO(png)).convert("RGB")
+    w, h = im.size
+    px = im.load()
+    assert px is not None
+    edge = ([px[x, 0] for x in range(0, w, 3)]
+            + [px[0, y] for y in range(0, h, 3)]
+            + [px[w - 1, y] for y in range(0, h, 3)])
+    base = tuple(sorted(c[i] for c in edge)[len(edge) // 2] for i in range(3))
+
+    def near(c: tuple[int, int, int]) -> bool:
+        return all(abs(c[i] - base[i]) <= tol for i in range(3)) and max(c) - min(c) <= 26
+
+    seen = bytearray(w * h)
+    queue: deque[tuple[int, int]] = deque()
+    for x in range(w):
+        if near(px[x, 0]):
+            seen[x] = 1
+            queue.append((x, 0))
+    for y in range(h):
+        for x in (0, w - 1):
+            if not seen[y * w + x] and near(px[x, y]):
+                seen[y * w + x] = 1
+                queue.append((x, y))
+
+    mask = _Image.new("L", (w, h), 0)
+    mp = mask.load()
+    assert mp is not None
+    while queue:
+        x, y = queue.popleft()
+        mp[x, y] = 255
+        for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+            if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx] and near(px[nx, ny]):
+                seen[ny * w + nx] = 1
+                queue.append((nx, ny))
+
+    if feather:
+        mask = mask.filter(ImageFilter.GaussianBlur(feather))
+    out = _Image.composite(_Image.new("RGB", (w, h), (255, 255, 255)), im, mask)
+    buf = io.BytesIO()
+    out.save(buf, "PNG", optimize=True)
+    return buf.getvalue()
+
+
 def resize_png(png: bytes, edge: int) -> bytes:
     """等比缩到长边 edge 像素（前端用的 320px 版就是这么来的）。"""
     from PIL import Image as _Image

@@ -174,4 +174,24 @@ class LLMClient:
                 t = pick(others, lambda s: sus.get(s, 0.0) + self.rng.random())
             return {"thinking": f"综合今天的发言，{t} 号最像狼。", "target": t}
 
+        if kind == "witch":
+            # 没有 key 时的兜底：有解药就救（除非刀的是自己），否则留着毒药
+            killed = c.get("killed")
+            if c.get("has_cure") and killed and killed != me:
+                return {"thinking": "先把人救下来，毒药留着。", "action": "save", "target": 0}
+            if c.get("has_poison") and sus:
+                t = pick(others, lambda s: sus.get(s, 0.0) + self.rng.random())
+                return {"thinking": f"{t} 号最可疑，毒他。", "action": "poison", "target": t}
+            return {"thinking": "今晚先不用药。", "action": "pass", "target": 0}
+
+        if kind == "hunter":
+            t = pick(others, lambda s: sus.get(s, 0.0) + self.rng.random()) if others else 0
+            return {"thinking": f"带走 {t} 号。", "target": t}
+
+        if kind == "mvp":
+            # 没有 key 时的兜底：挑赢家阵营里还活着的人，理由按身份套一句
+            pool = c.get("candidates") or alive or [me]
+            t = pool[0] if len(pool) == 1 else self.rng.choice(pool)
+            return {"seat": t, "reason": f"{t} 号这局的关键决策踩中了节奏。"}
+
         return {"thinking": "", "target": others[0] if others else me}

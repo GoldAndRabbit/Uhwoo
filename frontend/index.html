@@ -12,9 +12,18 @@
   <aside class="col sidebar">
     <label class="field">模式
       <select id="modeSel">
-        <option value="sim">模拟模式 · 6 个 agent 自己打</option>
         <option value="play" selected>单人模式</option>
         <option value="multi">多人模式 · 和朋友一起玩</option>
+        <option value="sim">模拟模式 · 多个 AI 自己打</option>
+      </select>
+    </label>
+    <label class="field">对局
+      <select id="setupSel"></select>
+    </label>
+    <label class="field">界面
+      <select id="uiMode">
+        <option value="play" selected>Play 模式</option>
+        <option value="debug">Debug 模式</option>
       </select>
     </label>
     <label class="field" id="roleField" hidden>身份
@@ -47,25 +56,15 @@
     </label>
     <label class="field" id="voiceField">音色
       <select id="voiceMode">
-        <option value="fast">快速语音模式 · 约 0.8s/句</option>
-        <option value="real" selected>真实语音模式 · 约 1.6s/句</option>
+        <option value="fast">快速语音模式</option>
+        <option value="real" selected>真实语音模式</option>
       </select>
     </label>
     <button id="btnStart" class="btn primary">开一局</button>
     <button id="btnStop" class="btn ghost" disabled>停止这一局</button>
 
-    <div class="sec-head"><span class="caret">▾</span> 玩家 <span class="sec-right" id="aliveCount">0/0 存活</span></div>
-    <div id="players" class="players">
-      <div class="prow sys" data-seat="sys">
-        <span class="pname">系统全局状态</span>
-        <span class="pmeta">0 次调用</span>
-      </div>
-    </div>
-
     <div class="sec-head"><span class="caret">▾</span> 历史对话 <span class="sec-right" id="histCount">0</span></div>
     <div id="history" class="history"></div>
-    <button id="btnNew" class="btn dashed">+ 新建对话</button>
-    <div class="foot">购物车 / 记忆 / 暂存队列都随对话保留</div>
   </aside>
 
   <!-- 中栏 -->
@@ -74,6 +73,9 @@
       <span>每轮上下文与输出</span>
       <span class="col-head-right"><b id="callCount">0</b> 次调用</span>
     </div>
+    <div id="sysRow" class="sysrow"></div>
+    <div id="ctxFaces" class="ctxfaces"></div>
+    <details id="sysBlk" class="sysblk" hidden></details>
     <div class="filter-bar" id="filterBar" hidden>
       只看 <b id="filterName"></b><button id="filterClear">显示全部</button>
     </div>
@@ -83,13 +85,18 @@
   <!-- 右栏 -->
   <section class="col right">
     <div class="mebar" id="meBar" hidden>
+      <button id="btnBack" class="backbtn">← 返回</button>
       <span id="meBarText"></span>
       <span class="mebar-btns">
         <button id="barStop">停止</button>
         <button id="barNew">重开</button>
       </span>
     </div>
-    <div id="log" class="log"></div>
+    <div class="table">
+      <div class="seats" id="seatsL"></div>
+      <div id="log" class="log"></div>
+      <div class="seats" id="seatsR"></div>
+    </div>
     <div class="ask" id="ask" hidden>
       <div class="ask-head"><b id="askTitle"></b><span id="askLeft" class="ask-left"></span></div>
       <div class="ask-body" id="askBody"></div>

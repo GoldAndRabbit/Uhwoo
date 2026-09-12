@@ -4,7 +4,8 @@
     .venv/bin/python -m scripts.gen_avatars f1 m3      # 只重画这几张（先删原图）
 
 原图 2144×2144 落在 assets/avatars-original/（和角色图一样不进仓库），
-frontend/img/avatars/ 下留 320px 的版本，前端用的是后者。
+frontend/img/avatars/ 下留 320px、**背景漂成纯白**的版本，前端用的是后者。
+所以改了漂白参数不用重新花钱生图，直接重跑这个脚本就行（原图都在）。
 seed 固定：同一个人重跑不会变脸，image_api 的磁盘缓存也能命中。
 """
 from __future__ import annotations
@@ -13,7 +14,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-from backend.image_api import ROOT, generate_png, resize_png
+from backend.image_api import ROOT, generate_png, resize_png, whiten_bg
 
 ORIGINAL = ROOT / "assets" / "avatars-original"
 PUBLIC = ROOT / "frontend" / "img" / "avatars"
@@ -83,7 +84,7 @@ async def one(key: str, seed: int, who: str) -> str:
         ORIGINAL.mkdir(parents=True, exist_ok=True)
         raw.write_bytes(png)
         note = f"新出 {len(png) // 1024}KB"
-    small = resize_png(png, EDGE)
+    small = resize_png(whiten_bg(png), EDGE)      # 统一漂成纯白底，排在一起才齐
     PUBLIC.mkdir(parents=True, exist_ok=True)
     (PUBLIC / f"{key}.png").write_bytes(small)
     return f"✓ {key}  {note} → {EDGE}px {len(small) // 1024}KB"

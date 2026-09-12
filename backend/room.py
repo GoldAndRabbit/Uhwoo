@@ -14,8 +14,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .game import Game
+from .model import DEFAULT_SETUP, SETUPS
 
-MAX_HUMANS = 6
+MAX_HUMANS = 9
 ROOM_TTL = 6 * 3600          # 空置 6 小时就回收
 
 # 随机昵称：一个中文名 + 6 位数字。进多人模式时前端拿一个填进昵称框，
@@ -98,8 +99,10 @@ class Room:
             raise ValueError("这局还在进行中")
         people = list(self.members.values())
         gid = time.strftime("%Y%m%d%H%M%S")
+        setup = settings.get("setup")
+        size = len(SETUPS.get(setup or DEFAULT_SETUP, SETUPS[DEFAULT_SETUP])["roles"])
         rng = random.Random()
-        seats = list(range(1, 7))
+        seats = list(range(1, size + 1))
         rng.shuffle(seats)
         for m, seat in zip(people, seats):
             m.seat = seat
@@ -112,6 +115,7 @@ class Room:
             clone=settings.get("clone"),
             humans=len(people),
             names=names,
+            setup=setup,
         )
         # Game 自己会随机分座位，这里覆盖成房间里已经分好的，保证 token→座位对得上
         self.game.humans = {m.seat for m in people if m.seat}
